@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "UGC Flow Connector",
+  "version": "1.0.0",
+  "description": "Konektor otomatis antara UGC Flow Studio dan Google Flow (flow.google.com)",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://flow.google.com/*",
+    "http://localhost:8787/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "UGC Flow Connector"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://flow.google.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ],
+      "run_at": "document_end"
+    }
+  ]
+}

@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="id">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>UGC Flow Studio</title>
+		<link rel="stylesheet" href="/css/app.css" />
+		<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%235E9FE8'/%3E%3Cpath d='M12 9l12 7-12 7z' fill='%23191919'/%3E%3C/svg%3E" />
+	</head>
+	<body>
+		<div class="app">
+			<aside class="sidebar">
+				<div class="brand">
+					<div class="brand-mark">UF</div>
+					<div>
+						<div class="brand-name">UGC Flow Studio</div>
+						<div class="brand-sub" id="brandSub">otomatis dari foto ke video</div>
+					</div>
+				</div>
+				<nav class="nav" id="nav">
+					<button class="nav-item active" data-go="dashboard"><span>Dashboard</span></button>
+					<button class="nav-item" data-go="ugc"><span>UGC Studio</span></button>
+					<button class="nav-item" data-go="podcast"><span>Podcast AI</span></button>
+					<button class="nav-item" data-go="voice"><span>Voice Studio</span></button>
+					<button class="nav-item" data-go="live"><span>Live 24 Jam</span></button>
+					<button class="nav-item" data-go="automation"><span>Flow Otomatis</span></button>
+					<button class="nav-item" data-go="jobs"><span>Jobs</span><span class="nav-count" id="navJobs">0</span></button>
+					<button class="nav-item" data-go="library"><span>Library</span></button>
+					<button class="nav-item" data-go="assets"><span>Aset &amp; Foto</span></button>
+					<button class="nav-item" data-go="brand"><span>Brand Kit</span></button>
+					<button class="nav-item" data-go="settings"><span>Settings</span></button>
+					<button class="nav-item" data-go="logs"><span>Log</span></button>
+				</nav>
+				<div class="sidebar-foot">
+					<div class="mode-row"><span class="dot" id="dotFlow"></span><span>Flow: <b id="modeFlow">-</b></span></div>
+					<div class="mode-row"><span class="dot" id="dotTts"></span><span>TTS: <b id="modeTts">-</b></span></div>
+					<div class="mode-row"><span class="dot" id="dotSse"></span><span>Realtime: <b id="modeSse">connecting</b></span></div>
+				</div>
+			</aside>
+
+			<main class="main">
+				<header class="topbar">
+					<div>
+						<h1 id="viewTitle">Dashboard</h1>
+						<p id="viewSub">Ringkasan produksi konten kamu</p>
+					</div>
+					<div class="topbar-actions">
+						<button class="btn ghost" id="btnPause">Pause queue</button>
+						<button class="btn ghost" id="btnRefresh">Refresh</button>
+						<button class="btn primary" data-go="ugc">+ Video UGC</button>
+					</div>
+				</header>
+
+				<div class="content">
+					<!-- DASHBOARD -->
+					<section class="view active" data-view="dashboard">
+						<div class="stat-grid" id="statGrid"></div>
+						<div class="grid two">
+							<div class="card">
+								<div class="card-head"><h3>Job terakhir</h3><button class="btn tiny ghost" data-go="jobs">Lihat semua</button></div>
+								<div id="dashJobs" class="list"></div>
+							</div>
+							<div class="card">
+								<div class="card-head"><h3>Status live</h3><button class="btn tiny ghost" data-go="live">Kelola</button></div>
+								<div id="dashLive" class="list"></div>
+							</div>
+						</div>
+						<div class="card">
+							<div class="card-head"><h3>Pemakaian 14 hari</h3><span class="muted small">video / gambar / menit render</span></div>
+							<div id="usageChart" class="chart"></div>
+						</div>
+						<div class="card">
+							<div class="card-head"><h3>Video terbaru</h3><button class="btn tiny ghost" data-go="library">Library</button></div>
+							<div id="dashVideos" class="video-grid"></div>
+						</div>
+					</section>
+
+					<!-- UGC STUDIO -->
+					<section class="view" data-view="ugc">
+						<div class="grid sidebar-right">
+							<div class="stack">
+								<div class="card">
+									<div class="card-head"><h3>1. Foto produk</h3><span class="muted small">bisa banyak foto sekaligus</span></div>
+									<div class="drop" id="ugcDrop">
+										<input type="file" id="ugcFiles" multiple accept="image/*,video/*" hidden />
+										<div class="drop-inner">
+											<strong>Tarik foto ke sini</strong>
+											<span class="muted small">atau klik untuk pilih file (jpg, png, webp, mp4)</span>
+										</div>
+									</div>
+									<div class="picker" id="ugcAssets"></div>
+								</div>
+
+								<div class="card">
+									<div class="card-head"><h3>2. Brief produk</h3></div>
+									<div class="grid two">
+										<label class="field"><span>Nama produk</span><input id="ugcProduct" placeholder="Serum Glow Vitamin C" /></label>
+										<label class="field"><span>Masalah yang dipecahkan</span><input id="ugcProblem" placeholder="kulit kusam &amp; bekas jerawat" /></label>
+									</div>
+									<label class="field"><span>Benefit / keunggulan (pisahkan dengan koma)</span><textarea id="ugcBenefits" rows="2" placeholder="cepat menyerap, tidak lengket, hasil 7 hari"></textarea></label>
+									<div class="grid three">
+										<label class="field"><span>Angle konten</span><select id="ugcAngle"></select></label>
+										<label class="field"><span>Persona kreator</span><select id="ugcPersona"></select></label>
+										<label class="field"><span>Suara</span><select id="ugcVoice"></select></label>
+									</div>
+									<div class="row gap">
+										<button class="btn" id="ugcScriptBtn">Buat skrip dulu</button>
+										<button class="btn ghost" id="ugcSaveProduct">Simpan sebagai preset</button>
+										<select id="ugcProductPreset" class="inline-select"><option value="">Preset produk...</option></select>
+									</div>
+								</div>
+
+								<div class="card" id="ugcScriptCard" hidden>
+									<div class="card-head">
+										<h3>3. Skrip (bisa diedit)</h3>
+										<div class="row gap">
+											<a href="https://flow.google.com/" target="_blank" class="btn tiny primary" style="text-decoration:none;display:inline-flex;align-items:center;gap:4px;">🚀 Buka Google Flow</a>
+											<button class="btn tiny ghost" id="ugcScriptClear">Buang skrip</button>
+										</div>
+									</div>
+									<div class="script-head">
+										<label class="field"><span>Judul</span><input id="ugcScriptTitle" /></label>
+										<label class="field"><span>Hook</span><input id="ugcScriptHook" /></label>
+									</div>
+									<div id="ugcScenes" class="scenes"></div>
+
+									<!-- ALUR OTOMATIS GOOGLE FLOW -->
+									<div class="flow-auto-box" style="margin-top:16px;background:#151821;border:1px solid #2B3347;border-radius:12px;padding:16px;">
+										<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+											<strong style="color:#5E9FE8;font-size:14px;display:flex;align-items:center;gap:6px;">
+												<span>⚡</span> Alur Otomatis Google Flow
+											</strong>
+											<span class="pill" id="flowWatcherBadge" style="background:#1C2E24;color:#72BC8F;border:1px solid #2D5940;font-size:11px;">🟢 Pemantau Downloads Aktif</span>
+										</div>
+										<p class="muted small" style="margin-bottom:12px;line-height:1.5;">
+											1. Klik <strong>"🚀 Buka di Flow"</strong> pada scene di atas (prompt otomatis disalin &amp; Flow terbuka).<br />
+											2. Di Google Flow, tekan <strong>Ctrl + V</strong> di kotak prompt lalu klik <strong>Generate</strong>.<br />
+											3. Begitu selesai dan Anda klik <strong>Download</strong> di Flow, UGC Studio akan <strong>otomatis mendeteksi video dari folder Downloads</strong>, mengisi suara AI (bersih tanpa teks yang menutupi), dan langsung menyimpannya ke <strong>Library</strong>!
+										</p>
+										<div class="row gap" style="flex-wrap:wrap;">
+											<button type="button" class="btn small primary" id="btnCheckDownloads">📥 Cek &amp; Ambil Video dari Downloads</button>
+											<input type="file" id="flowManualVideoInput" accept="video/mp4,video/webm,video/mov,video/*" hidden />
+											<button type="button" class="btn small ghost" id="btnUploadFlowManual">📁 Pilih File Video Manual</button>
+											<button type="button" class="btn small ghost" id="btnShowFlowGuide">❓ Panduan Flow</button>
+										</div>
+										<div id="flowRecentDownloads" style="margin-top:12px;display:none;"></div>
+										<div id="flowIngestStatus" style="margin-top:12px;display:none;background:#1C2433;border:1px solid #364B6E;border-radius:8px;padding:12px;"></div>
+									</div>
+
+									<div class="caption-box">
+										<label class="field"><span>Caption</span><textarea id="ugcCaption" rows="2"></textarea></label>
+										<label class="field"><span>Hashtag</span><input id="ugcHashtags" /></label>
+									</div>
+								</div>
+							</div>
+
+							<div class="stack">
+								<div class="card sticky">
+									<div class="card-head"><h3>Setelan render</h3></div>
+									<label class="field"><span>Sumber visual</span>
+										<select id="ugcMode">
+											<option value="flow-video">Flow video (image to video)</option>
+											<option value="flow-image">Flow gambar + gerak lokal</option>
+											<option value="local">Lokal saja (tanpa API)</option>
+										</select>
+									</label>
+									<label class="field"><span>Prioritas Flow</span>
+										<select id="ugcLane">
+											<option value="low">Lower priority (unlimited)</option>
+											<option value="standard">Standard (kuota harian)</option>
+										</select>
+									</label>
+									<div class="grid two">
+										<label class="field"><span>Jumlah scene</span><input id="ugcScenesCount" type="number" min="2" max="12" value="5" /></label>
+										<label class="field"><span>Durasi / scene (s)</span><input id="ugcSceneDuration" type="number" min="2" max="15" value="5" /></label>
+										<label class="field"><span>Rasio</span><select id="ugcAspect"></select></label>
+										<label class="field"><span>Resolusi</span><select id="ugcResolution"></select></label>
+										<label class="field"><span>FPS</span><input id="ugcFps" type="number" min="24" max="60" value="30" /></label>
+										<label class="field"><span>Gerak kamera</span><select id="ugcMotion"></select></label>
+										<label class="field"><span>Gaya subtitle</span><select id="ugcSubtitle"></select></label>
+										<label class="field"><span>Musik latar</span><select id="ugcMusic"></select></label>
+										<label class="field"><span>Preset suara natural</span><select id="ugcNatural"></select></label>
+										<label class="field"><span>Watermark teks</span><input id="ugcWatermark" placeholder="@tokokamu" /></label>
+										<label class="field"><span>Jumlah variasi</span><input id="ugcVariants" type="number" min="1" max="10" value="1" /></label>
+										<label class="field check"><input type="checkbox" id="ugcPerAsset" /><span>1 video per foto (batch)</span></label>
+									</div>
+									<button class="btn primary block" id="ugcRender">Render video sekarang</button>
+									<p class="muted small" id="ugcHint">Mode simulate aktif kalau API Flow belum diisi - hasil tetap jadi video utuh.</p>
+								</div>
+
+								<div class="card">
+									<div class="card-head"><h3>Generate gambar (Flow)</h3></div>
+									<label class="field"><span>Prompt gambar</span><textarea id="imgPrompt" rows="2" placeholder="produk di meja marmer, cahaya pagi, gaya UGC"></textarea></label>
+									<div class="grid two">
+										<label class="field"><span>Jumlah</span><input id="imgCount" type="number" min="1" max="12" value="4" /></label>
+										<label class="field"><span>Rasio</span><select id="imgAspect"></select></label>
+									</div>
+									<button class="btn block" id="imgGenerate">Generate gambar</button>
+								</div>
+							</div>
+						</div>
+					</section>
+
+					<!-- PODCAST -->
+					<section class="view" data-view="podcast">
+						<div class="grid sidebar-right">
+							<div class="stack">
+								<div class="card">
+									<div class="card-head"><h3>Topik podcast</h3></div>
+									<label class="field"><span>Topik / judul</span><input id="podTopic" placeholder="Cara jualan di TikTok tanpa modal besar" /></label>
+									<label class="field"><span>Catatan / poin wajib dibahas</span><textarea id="podNotes" rows="3" placeholder="bahas algoritma, konten organik, studi kasus toko kecil"></textarea></label>
+									<div class="grid three">
+										<label class="field"><span>Durasi (menit)</span><input id="podMinutes" type="number" min="1" max="60" value="6" /></label>
+										<label class="field"><span>Nada bicara</span><input id="podTone" value="santai, informatif" /></label>
+										<label class="field"><span>Preset natural</span><select id="podNatural"></select></label>
+									</div>
+									<div class="grid two">
+										<label class="field"><span>Host 1 - nama</span><input id="podHost1" value="Rafi" /></label>
+										<label class="field"><span>Host 1 - suara</span><select id="podVoice1"></select></label>
+										<label class="field"><span>Host 2 - nama</span><input id="podHost2" value="Nadia" /></label>
+										<label class="field"><span>Host 2 - suara</span><select id="podVoice2"></select></label>
+									</div>
+									<button class="btn" id="podScriptBtn">Buat skrip podcast</button>
+								</div>
+								<div class="card" id="podScriptCard" hidden>
+									<div class="card-head"><h3>Skrip dialog</h3><span class="muted small" id="podScriptMeta"></span></div>
+									<div id="podSegments" class="segments"></div>
+								</div>
+							</div>
+							<div class="stack">
+								<div class="card sticky">
+									<div class="card-head"><h3>Visual &amp; audio</h3></div>
+									<label class="field"><span>Gaya visual</span>
+										<select id="podStyle">
+											<option value="wave">Gelombang halus</option>
+											<option value="bars">Bar equalizer</option>
+											<option value="spectrum">Spektrum</option>
+										</select>
+									</label>
+									<div class="grid two">
+										<label class="field"><span>Rasio</span><select id="podAspect"></select></label>
+										<label class="field"><span>Resolusi</span><select id="podResolution"></select></label>
+										<label class="field"><span>Musik latar</span><select id="podMusic"></select></label>
+										<label class="field"><span>Jeda antar dialog (s)</span><input id="podGap" type="number" step="0.05" min="0" max="2" value="0.35" /></label>
+									</div>
+									<label class="field"><span>Cover (opsional)</span><select id="podCover"><option value="">Tanpa cover</option></select></label>
+									<label class="field check"><input type="checkbox" id="podSubtitle" checked /><span>Bakar subtitle ke video</span></label>
+									<button class="btn primary block" id="podRender">Render podcast</button>
+									<p class="muted small">Hasil: video podcast + file MP3 siap upload.</p>
+								</div>
+							</div>
+						</div>
+					</section>
+
+					<!-- VOICE -->
+					<section class="view" data-view="voice">
+						<div class="tabs" id="voiceTabs">
+							<button class="tab active" data-tab="tts">Teks jadi suara</button>
+							<button class="tab" data-tab="transform">Ubah suara jadi natural</button>
+						</div>
+						<div class="grid sidebar-right">
+							<div class="stack">
+								<div class="card" data-pane="tts">
+									<div class="card-head"><h3>Teks</h3><span class="muted small" id="voiceCount">0 karakter</span></div>
+									<label class="field"><span>Naskah</span><textarea id="voiceText" rows="8" placeholder="Tempel naskah voice over di sini..."></textarea></label>
+								</div>
+								<div class="card" data-pane="transform" hidden>
+									<div class="card-head"><h3>File suara</h3><span class="muted small">audio atau video</span></div>
+									<div class="drop small" id="voiceDrop">
+										<input type="file" id="voiceFile" accept="audio/*,video/*" hidden />
+										<div class="drop-inner"><strong>Upload rekaman</strong><span class="muted small">mp3, wav, m4a, mp4</span></div>
+									</div>
+									<label class="field"><span>atau pilih dari aset</span><select id="voiceAsset"><option value="">Pilih file...</option></select></label>
+								</div>
+								<div class="card">
+									<div class="card-head"><h3>Hasil suara</h3><button class="btn tiny ghost" id="voiceRefresh">Refresh</button></div>
+									<div id="voiceList" class="list"></div>
+								</div>
+							</div>
+							<div class="stack">
+								<div class="card sticky">
+									<div class="card-head"><h3>Karakter suara</h3></div>
+									<label class="field"><span>Voice</span><select id="voiceSelect"></select></label>
+									<label class="field"><span>Preset natural</span><select id="voiceNatural"></select></label>
+									<label class="field range"><span>Pitch <b id="voicePitchVal">0</b></span><input id="voicePitch" type="range" min="-6" max="6" step="0.5" value="0" /></label>
+									<label class="field range"><span>Kecepatan <b id="voiceSpeedVal">1.00</b></span><input id="voiceSpeed" type="range" min="0.7" max="1.4" step="0.01" value="1" /></label>
+									<label class="field range"><span>Ruang / reverb <b id="voiceRoomVal">0.20</b></span><input id="voiceRoom" type="range" min="0" max="0.8" step="0.05" value="0.2" /></label>
+									<label class="field check"><input type="checkbox" id="voiceDenoise" checked /><span>Bersihkan noise</span></label>
+									<label class="field check"><input type="checkbox" id="voiceMp3" checked /><span>Export MP3</span></label>
+									<button class="btn primary block" id="voiceRender">Proses suara</button>
+								</div>
+							</div>
+						</div>
+					</section>
+
+					<!-- LIVE -->
+					<section class="view" data-view="live">
+						<div class="grid sidebar-right">
+							<div class="stack">
+								<div id="streamList" class="stack"></div>
+								<div class="card">
+									<div class="card-head"><h3>Log streaming</h3><button class="btn tiny ghost" id="streamLogRefresh">Refresh</button></div>
+									<div id="streamLogs" class="logbox"></div>
+								</div>
+							</div>
+							<div class="stack">
+								<div class="card sticky">
+									<div class="card-head"><h3>Buat channel live</h3></div>
+									<label class="field"><span>Nama</span><input id="lvName" placeholder="Live Musik 24 Jam" /></label>
+									<label class="field"><span>RTMP URL</span><input id="lvRtmp" value="rtmp://a.rtmp.youtube.com/live2" /></label>
+									<label class="field"><span>Stream key YouTube</span><input id="lvKey" placeholder="xxxx-xxxx-xxxx-xxxx" /></label>
+									<label class="field"><span>Video (bisa pilih banyak = playlist)</span><select id="lvItems" multiple size="6"></select></label>
+									<div class="grid two">
+										<label class="field"><span>Mode encode</span><select id="lvMode"><option value="auto">Auto (hemat CPU)</option><option value="copy">Copy</option><option value="encode">Encode ulang</option></select></label>
+										<label class="field"><span>Resolusi</span><select id="lvRes"><option value="1080">1080p</option><option value="720">720p</option><option value="480">480p</option></select></label>
+										<label class="field"><span>FPS</span><input id="lvFps" type="number" value="30" min="24" max="60" /></label>
+										<label class="field"><span>Bitrate video</span><input id="lvBitrate" value="4500k" /></label>
+										<label class="field"><span>Audio</span><select id="lvAudio"><option value="source">Dari video</option><option value="music">Musik loop</option><option value="silent">Senyap</option></select></label>
+										<label class="field"><span>Musik loop</span><select id="lvMusic"><option value="">-</option></select></label>
+									</div>
+									<label class="field check"><input type="checkbox" id="lvLoop" checked /><span>Loop terus (24 jam)</span></label>
+									<label class="field check"><input type="checkbox" id="lvAuto" checked /><span>Auto start saat server nyala</span></label>
+									<button class="btn primary block" id="lvCreate">Simpan channel</button>
+									<p class="muted small">Stream otomatis nyambung ulang kalau koneksi drop.</p>
+								</div>
+							</div>
+						</div>
+					</section>
+
+					<!-- AUTOMATION -->
+					<section class="view" data-view="automation">
+						<div class="grid sidebar-right">
+							<div class="stack">
+								<div class="card">
+									<div class="card-head"><h3>Flow otomatis aktif</h3><span class="muted small" id="inboxPath"></span></div>
+									<div id="automationList" class="list"></div>
+								</div>
+								<div class="card">
+									<div class="card-head"><h3>Cara pakai</h3></div>
+									<ul class="help">
+										<li><b>Watch folder</b>: taruh foto produk ke folder inbox, video langsung dibuat otomatis.</li>
+										<li><b>Jadwal</b>: produksi konten tiap hari jam tertentu tanpa disentuh.</li>
+										<li><b>Interval</b>: bikin konten tiap X menit (cocok buat stok konten harian).</li>
+										<li><b>Webhook</b>: panggil dari Zapier/n8n/Sheet, kirim JSON berisi product &amp; benefits.</li>
+									</ul>
+								</div>
+							</div>
+							<div class="stack">
+								<div class="card sticky">
+									<div class="card-head"><h3>Buat automation</h3></div>
+									<label class="field"><span>Nama</span><input id="atName" placeholder="UGC harian dari inbox" /></label>
+									<label class="field"><span>Aksi</span><select id="atAction"></select></label>
+									<label class="field"><span>Pemicu</span><select id="atTrigger"></select></label>
+									<div class="grid two" id="atScheduleFields" hidden>
+										<label class="field"><span>Jam (24h)</span><input id="atTime" type="time" value="08:00" /></label>
+										<label class="field"><span>Hari</span><input id="atDays" value="0,1,2,3,4,5,6" /></label>
+									</div>
+									<label class="field" id="atIntervalField" hidden><span>Tiap berapa menit</span><input id="atMinutes" type="number" min="5" value="120" /></label>
+									<label class="field"><span>Produk / topik default</span><input id="atProduct" placeholder="opsional" /></label>
+									<label class="field"><span>Payload tambahan (JSON)</span><textarea id="atPayload" rows="4" placeholder='{"angle":"review-jujur","sceneCount":5}'></textarea></label>
+									<label class="field" id="atStreamField" hidden><span>Channel live</span><select id="atStream"></select></label>
+									<button class="btn primary block" id="atCreate">Aktifkan automation</button>
+								</div>
+							</div>
+						</div>
+					</section>
+
+					<!-- JOBS -->
+					<section class="view" data-view="jobs">
+						<div class="card">
+							<div class="card-head">
+								<h3>Antrian &amp; riwayat</h3>
+								<div class="row gap">
+									<select id="jobFilter" class="inline-select">
+										<option value="">Semua status</option>
+										<option value="queued">Queued</option>
+										<option value="running">Running</option>
+										<option value="done">Done</option>
+										<option value="failed">Failed</option>
+									</select>
+								</div>
+							</div>
+							<div id="jobList" class="list"></div>
+						</div>
+						<div class="card" id="jobDetailCard" hidden>
+							<div class="card-head"><h3 id="jobDetailTitle">Detail job</h3><button class="btn tiny ghost" id="jobDetailClose">Tutup</button></div>
+							<div id="jobDetail" class="logbox"></div>
+						</div>
+					</section>
+
+					<!-- LIBRARY -->
+					<section class="view" data-view="library">
+						<div class="card">
+							<div class="card-head">
+								<h3>Video</h3>
+								<select id="libFilter" class="inline-select">
+									<option value="all">Semua</option>
+									<option value="ugc">UGC</option>
+									<option value="podcast">Podcast</option>
+								</select>
+							</div>
+							<div id="libVideos" class="video-grid"></div>
+						</div>
+						<div class="card">
+							<div class="card-head"><h3>Audio</h3></div>
+							<div id="libAudios" class="list"></div>
+						</div>
+					</section>
+
+					<!-- ASSETS -->
+					<section class="view" data-view="assets">
+						<div class="card">
+							<div class="card-head"><h3>Upload aset</h3><span class="muted small" id="assetHint"></span></div>
+							<div class="drop" id="assetDrop">
+								<input type="file" id="assetFiles" multiple hidden />
+								<div class="drop-inner"><strong>Tarik file ke sini</strong><span class="muted small">foto produk, video, musik, logo</span></div>
+							</div>
+						</div>
+						<div class="card">
+							<div class="card-head"><h3>Semua aset</h3>
+								<select id="assetFilter" class="inline-select">
+									<option value="">Semua</option>
+									<option value="image">Gambar</option>
+									<option value="video">Video</option>
+									<option value="audio">Audio</option>
+								</select>
+							</div>
+							<div id="assetGrid" class="asset-grid"></div>
+						</div>
+					</section>
+
+					<!-- BRAND -->
+					<section class="view" data-view="brand">
+						<div class="card">
+							<div class="card-head"><h3>Brand kit</h3><span class="muted small">dipakai otomatis saat bikin skrip &amp; caption</span></div>
+							<div class="grid two">
+								<label class="field"><span>Nama brand</span><input id="brName" /></label>
+								<label class="field"><span>Tagline</span><input id="brTagline" /></label>
+								<label class="field"><span>Target audience</span><input id="brAudience" /></label>
+								<label class="field"><span>Nada bicara</span><input id="brTone" /></label>
+								<label class="field"><span>Call to action</span><input id="brCta" /></label>
+								<label class="field"><span>Hashtag default</span><input id="brHashtags" /></label>
+								<label class="field"><span>Watermark teks</span><input id="brWatermark" /></label>
+								<label class="field"><span>Kata yang dihindari</span><input id="brBanned" placeholder="pisahkan dengan koma" /></label>
+								<label class="field"><span>Warna utama</span><input id="brPrimary" type="color" value="#5E9FE8" /></label>
+								<label class="field"><span>Warna aksen</span><input id="brAccent" type="color" value="#72BC8F" /></label>
+							</div>
+							<button class="btn primary" id="brSave">Simpan brand kit</button>
+						</div>
+					</section>
+
+					<!-- SETTINGS -->
+					<section class="view" data-view="settings">
+						<div class="card">
+							<div class="card-head"><h3>Flow Ultra</h3><button class="btn tiny" data-test="flow">Tes koneksi</button></div>
+							<div class="grid two">
+								<label class="field"><span>Provider</span><select id="stFlowProvider"><option value="simulate">simulate (tanpa API)</option><option value="flow">flow (pakai API)</option></select></label>
+								<label class="field"><span>Base URL</span><input id="stFlowBase" placeholder="https://api.flow-provider.com" /></label>
+								<label class="field"><span>API key</span><input id="stFlowKey" type="password" placeholder="masukkan API key Flow Ultra" /></label>
+								<label class="field"><span>Model video</span><input id="stFlowVideoModel" /></label>
+								<label class="field"><span>Model gambar</span><input id="stFlowImageModel" /></label>
+								<label class="field"><span>Lane default</span><select id="stFlowLane"><option value="low">low (lower priority, unlimited)</option><option value="standard">standard</option></select></label>
+								<label class="field"><span>Paralel lane low</span><input id="stFlowLowConc" type="number" min="1" max="8" /></label>
+								<label class="field"><span>Limit standard / hari</span><input id="stFlowDaily" type="number" min="0" /></label>
+								<label class="field"><span>Endpoint video</span><input id="stFlowVideoPath" /></label>
+								<label class="field"><span>Endpoint gambar</span><input id="stFlowImagePath" /></label>
+								<label class="field"><span>Endpoint status</span><input id="stFlowStatusPath" /></label>
+								<label class="field check"><input type="checkbox" id="stFlowFallback" /><span>Turun ke lane low otomatis kalau kuota standard habis</span></label>
+							</div>
+						</div>
+						<div class="card">
+							<div class="card-head"><h3>Text to speech</h3><button class="btn tiny" data-test="tts">Tes suara</button></div>
+							<div class="grid two">
+								<label class="field"><span>Provider</span><select id="stTtsProvider"><option value="fishaudio">Fish Audio (Murah &amp; Bagus Bahasa Indonesia)</option><option value="simulate">simulate (Google TTS Gratis)</option><option value="elevenlabs">elevenlabs</option><option value="openai">openai</option><option value="custom">custom</option></select></label>
+								<label class="field"><span>Base URL</span><input id="stTtsBase" placeholder="https://api.fish.audio/v1/tts" /></label>
+								<label class="field"><span>API key</span><input id="stTtsKey" type="password" placeholder="..." /></label>
+								<label class="field"><span>Model</span><input id="stTtsModel" /></label>
+								<label class="field"><span>Voice ID default</span><input id="stTtsVoice" placeholder="1b0b8ad55c6d49db94e1a9eadf6f4643" /></label>
+								<label class="field"><span>Preset natural default</span><select id="stTtsNatural"></select></label>
+								<label class="field check"><input type="checkbox" id="stTtsCache" checked /><span>Cache hasil TTS ke folder cache/ (hemat kredit)</span></label>
+								<label class="field check"><input type="checkbox" id="stTtsNaturalize" /><span>Selalu proses jadi natural</span></label>
+							</div>
+						</div>
+						<div class="card">
+							<div class="card-head"><h3>LLM penulis skrip</h3><button class="btn tiny" data-test="llm">Tes skrip</button></div>
+							<div class="grid two">
+								<label class="field"><span>Provider</span><select id="stLlmProvider"><option value="local">local (template bawaan)</option><option value="remote">remote (OpenAI compatible)</option></select></label>
+								<label class="field"><span>Base URL</span><input id="stLlmBase" placeholder="https://api.openai.com/v1" /></label>
+								<label class="field"><span>API key</span><input id="stLlmKey" type="password" /></label>
+								<label class="field"><span>Model</span><input id="stLlmModel" placeholder="gpt-4o-mini" /></label>
+							</div>
+						</div>
+						<div class="card">
+							<div class="card-head"><h3>Render &amp; queue</h3><button class="btn tiny" data-test="ffmpeg">Cek ffmpeg</button></div>
+							<div class="grid two">
+								<label class="field"><span>Resolusi default</span><select id="stRenderRes"><option value="1080">1080</option><option value="720">720</option><option value="480">480</option></select></label>
+								<label class="field"><span>FPS default</span><input id="stRenderFps" type="number" min="24" max="60" /></label>
+								<label class="field"><span>Preset x264</span><select id="stRenderPreset"><option>ultrafast</option><option>veryfast</option><option>faster</option><option>medium</option><option>slow</option></select></label>
+								<label class="field"><span>CRF</span><input id="stRenderCrf" type="number" min="16" max="30" /></label>
+								<label class="field"><span>Volume musik</span><input id="stRenderMusicVol" type="number" step="0.01" min="0" max="1" /></label>
+								<label class="field"><span>Job paralel</span><input id="stQueueConc" type="number" min="1" max="6" /></label>
+								<label class="field"><span>Auto retry</span><input id="stQueueRetry" type="number" min="0" max="5" /></label>
+								<label class="field"><span>Webhook notifikasi</span><input id="stNotifyUrl" placeholder="https://..." /></label>
+							</div>
+						</div>
+						<div class="card">
+							<div class="card-head"><h3>Default streaming</h3></div>
+							<div class="grid two">
+								<label class="field"><span>RTMP URL</span><input id="stStreamRtmp" /></label>
+								<label class="field"><span>Stream key</span><input id="stStreamKey" type="password" /></label>
+								<label class="field"><span>Bitrate video</span><input id="stStreamBitrate" /></label>
+								<label class="field"><span>Backoff restart (ms)</span><input id="stStreamBackoff" type="number" min="1000" /></label>
+							</div>
+							<div class="row gap">
+								<button class="btn primary" id="stSave">Simpan settings</button>
+								<button class="btn ghost" id="stCleanup">Bersihkan file sampah</button>
+							</div>
+							<div id="stResult" class="muted small"></div>
+						</div>
+					</section>
+
+					<!-- LOGS -->
+					<section class="view" data-view="logs">
+						<div class="card">
+							<div class="card-head"><h3>Log sistem</h3><button class="btn tiny ghost" id="logRefresh">Refresh</button></div>
+							<div id="logBox" class="logbox tall"></div>
+						</div>
+					</section>
+				</div>
+			</main>
+		</div>
+
+		<div class="toasts" id="toasts"></div>
+		<script src="/js/app.js"></script>
+	</body>
+</html>

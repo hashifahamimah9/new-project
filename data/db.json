@@ -1,0 +1,1401 @@
+{
+  "settings": {
+    "workspace": {
+      "appName": "UGC Flow Studio",
+      "brandName": "",
+      "language": "id",
+      "timezone": "Asia/Jakarta",
+      "theme": "dark"
+    },
+    "auth": {
+      "enabled": false,
+      "password": ""
+    },
+    "render": {
+      "resolution": "1080",
+      "fps": 30,
+      "preset": "veryfast",
+      "crf": 21,
+      "subtitleStyle": "none",
+      "musicVolume": 0.12,
+      "voiceVolume": 1,
+      "watermark": false,
+      "watermarkText": ""
+    },
+    "flow": {
+      "provider": "simulate",
+      "baseUrl": "",
+      "apiKey": "",
+      "videoModel": "flow-ultra-video",
+      "imageModel": "flow-ultra-image",
+      "videoPath": "/v1/videos",
+      "imagePath": "/v1/images",
+      "statusPath": "/v1/jobs/{id}",
+      "defaultLane": "low",
+      "autoFallbackToLow": true,
+      "lowConcurrency": 2,
+      "standardConcurrency": 1,
+      "standardDailyLimit": 50,
+      "pollIntervalMs": 5000,
+      "maxWaitMs": 900000
+    },
+    "tts": {
+      "provider": "fishaudio",
+      "baseUrl": "https://api.fish.audio/v1/tts",
+      "apiKey": "",
+      "model": "",
+      "defaultVoice": "1b0b8ad55c6d49db94e1a9eadf6f4643",
+      "fishAudioApiKey": "",
+      "fishAudioVoiceId": "1b0b8ad55c6d49db94e1a9eadf6f4643",
+      "cache": true,
+      "naturalize": true,
+      "naturalPreset": "podcast-warm"
+    },
+    "llm": {
+      "provider": "local",
+      "baseUrl": "",
+      "apiKey": "",
+      "model": ""
+    },
+    "stream": {
+      "rtmpUrl": "rtmp://a.rtmp.youtube.com/live2",
+      "streamKey": "",
+      "mode": "copy",
+      "videoBitrate": "4500k",
+      "audioBitrate": "128k",
+      "fps": 30,
+      "resolution": "1080",
+      "restartBackoffMs": 5000,
+      "maxRestarts": 0,
+      "healthCheckSeconds": 30
+    },
+    "queue": {
+      "concurrency": 2,
+      "maxRetries": 1,
+      "paused": false
+    },
+    "notifications": {
+      "webhookUrl": "",
+      "onJobDone": true,
+      "onJobFailed": true,
+      "onStreamDown": true
+    }
+  },
+  "brand": {
+    "name": "",
+    "tagline": "",
+    "logoAssetId": "",
+    "primaryColor": "#5E9FE8",
+    "accentColor": "#72BC8F",
+    "font": "system",
+    "ctaText": "Cek link di bio",
+    "hashtags": "#ugc #review #fyp",
+    "tone": "santai tapi meyakinkan",
+    "audience": "anak muda 18-34 di Indonesia",
+    "bannedWords": "",
+    "watermarkText": ""
+  },
+  "usage": {
+    "2026-09-11": {
+      "low": 15,
+      "standard": 0,
+      "renderSeconds": 96,
+      "images": 0,
+      "ttsChars": 1517,
+      "videos": 15
+    },
+    "2026-09-15": {
+      "low": 5,
+      "standard": 0,
+      "renderSeconds": 128,
+      "images": 0,
+      "ttsChars": 1468,
+      "videos": 5
+    },
+    "2026-09-17": {
+      "low": 0,
+      "standard": 0,
+      "renderSeconds": 98,
+      "images": 0,
+      "ttsChars": 913
+    }
+  },
+  "meta": {
+    "createdAt": "2026-09-09T04:59:56.627Z",
+    "version": 1
+  },
+  "assets": [
+    {
+      "id": "as_r0qxpj5guz",
+      "createdAt": "2026-09-17T08:31:57.582Z",
+      "updatedAt": "2026-09-17T08:31:57.582Z",
+      "name": "Serum Glad2Glow - Review jujur.mp4",
+      "kind": "video",
+      "file": "C:\\Users\\HP\\Documents\\PROJEK\\ugc-flow-studio\\ugc-flow-studio\\storage\\renders\\final\\ugc_rtj3n7n1.mp4",
+      "url": "/api/files/renders/final/ugc_rtj3n7n1.mp4",
+      "size": 8667931,
+      "source": "ugc",
+      "tags": [],
+      "meta": {
+        "videoId": "vid_ti7gr124s5"
+      }
+    },
+    {
+      "id": "as_idcqe17n7f",
+      "createdAt": "2026-09-17T08:29:45.696Z",
+      "updatedAt": "2026-09-17T08:29:45.696Z",
+      "name": "Wanita_tersenyum_di_depan_cermin_20260915094054.mp4",
+      "kind": "video",
+      "file": "C:\\Users\\HP\\Documents\\PROJEK\\ugc-flow-studio\\ugc-flow-studio\\storage\\uploads\\xzxo8j_Wanita_tersenyum_di_depan_cermin_20260915094054.mp4",
+      "url": "/api/files/uploads/xzxo8j_Wanita_tersenyum_di_depan_cermin_20260915094054.mp4",
+      "size": 2255274,
+      "source": "flow_download",
+      "tags": [],
+      "meta": {}
+    },
+    {
+      "id": "as_frux0mf0wu",
+      "createdAt": "2026-09-17T09:15:50.111Z",
+      "updatedAt": "2026-09-17T09:15:50.111Z",
+      "name": "Serum Glad2Glow - Review jujur.mp4",
+      "kind": "video",
+      "file": "C:\\Users\\HP\\Documents\\PROJEK\\ugc-flow-studio\\ugc-flow-studio\\storage\\renders\\final\\ugc_a8c6h8tx.mp4",
+      "url": "/api/files/renders/final/ugc_a8c6h8tx.mp4",
+      "size": 9099375,
+      "source": "ugc",
+      "tags": [],
+      "meta": {
+        "videoId": "vid_u0zohapr68"
+      }
+    },
+    {
+      "id": "as_kew41t3kpq",
+      "createdAt": "2026-09-17T09:13:20.135Z",
+      "updatedAt": "2026-09-17T09:13:20.135Z",
+      "name": "Glad2Glow_serum_video_advertisem…_20260914123117.mp4",
+      "kind": "video",
+      "file": "C:\\Users\\HP\\Documents\\PROJEK\\ugc-flow-studio\\ugc-flow-studio\\storage\\uploads\\pxumkt_Glad2Glow_serum_video_advertisem…_20260914123117.mp4",
+      "url": "/api/files/uploads/pxumkt_Glad2Glow_serum_video_advertisem…_20260914123117.mp4",
+      "size": 3458955,
+      "source": "flow_download",
+      "tags": [],
+      "meta": {}
+    },
+    {
+      "id": "as_c0scvkvww5",
+      "createdAt": "2026-09-17T07:46:05.256Z",
+      "updatedAt": "2026-09-17T07:46:05.256Z",
+      "name": "serum GLAD2GLOW - Review jujur.mp4",
+      "kind": "video",
+      "file": "C:\\Users\\HP\\Documents\\PROJEK\\ugc-flow-studio\\ugc-flow-studio\\storage\\renders\\final\\ugc_dhi8r06j.mp4",
+      "url": "/api/files/renders/final/ugc_dhi8r06j.mp4",
+      "size": 11384370,
+      "source": "ugc",
+      "tags": [],
+      "meta": {
+        "videoId": "vid_lat3vw41zo"
+      }
+    },
+    {
+      "id": "as_y03ofq9oua",
+      "createdAt": "2026-09-17T07:42:38.930Z",
+      "updatedAt": "2026-09-17T07:42:38.930Z",
+      "name": "Glad2Glow_serum_video_advertisem…_20260914123117.mp4",
+      "kind": "video",
+      "file": "C:\\Users\\HP\\Documents\\PROJEK\\ugc-flow-studio\\ugc-flow-studio\\storage\\uploads\\mrozbs_Glad2Glow_serum_video_advertisem…_20260914123117.mp4",
+      "url": "/api/files/uploads/mrozbs_Glad2Glow_serum_video_advertisem…_20260914123117.mp4",
+      "size": 3458955,
+      "source": "flow_download",
+      "tags": [],
+      "meta": {}
+    },
+    {
+      "id": "as_3e5nfsnekq",
+      "createdAt": "2026-09-17T07:40:49.250Z",
+      "updatedAt": "2026-09-17T07:40:49.250Z",
+      "name": "Wanita_tersenyum_di_depan_cermin_20260915094054.mp4",
+      "kind": "video",
+      "file": "C:\\Users\\HP\\Documents\\PROJEK\\ugc-flow-studio\\ugc-flow-studio\\storage\\uploads\\wyao4rpt_Wanita_tersenyum_di_depan_cermin_20260915094054.mp4",
+      "url": "/api/files/uploads/wyao4rpt_Wanita_tersenyum_di_depan_cermin_20260915094054.mp4",
+      "size": 2255274,
+      "source": "upload",
+      "tags": [],
+      "meta": {
+        "contentType": "video/mp4"
+      }
+    },
+    {
+      "id": "as_leli68oi5d",
+      "createdAt": "2026-09-15T02:27:14.535Z",
+      "updatedAt": "2026-09-15T02:27:14.535Z",
+      "name": "serum GLAD2GLOW - Review jujur.mp4",
+      "kind": "video",
+      "file": "C:\\Users\\HP\\Documents\\PROJEK\\ugc-flow-studio\\ugc-flow-studio\\storage\\renders\\final\\ugc_qtm1as3s.mp4",
+      "url": "/api/files/renders/final/ugc_qtm1as3s.mp4",
+      "size": 8881344,
+      "source": "ugc",
+      "tags": [],
+      "meta": {
+        "videoId": "vid_4vzofisbc7"
+      }
+    },
+    {
+      "id": "as_qee1qgux33",
+      "createdAt": "2026-09-15T02:24:24.396Z",
+      "updatedAt": "2026-09-15T02:24:24.396Z",
+      "name": "Wanita_tersenyum_di_depan_cermin_20260915094054.mp4",
+      "kind": "video",
+      "file": "C:\\Users\\HP\\Documents\\PROJEK\\ugc-flow-studio\\ugc-flow-studio\\storage\\uploads\\s49e7j_Wanita_tersenyum_di_depan_cermin_20260915094054.mp4",
+      "url": "/api/files/uploads/s49e7j_Wanita_tersenyum_di_depan_cermin_20260915094054.mp4",
+      "size": 2255274,
+      "source": "flow_download",
+      "tags": [],
+      "meta": {}
+    },
+    {
+      "id": "as_jkiktp63dl",
+      "createdAt": "2026-09-15T02:54:54.522Z",
+      "updatedAt": "2026-09-15T02:54:54.522Z",
+      "name": "Wanita_tersenyum_di_depan_cermin_20260915094054.mp4",
+      "kind": "video",
+      "file": "C:\\Users\\HP\\Documents\\PROJEK\\ugc-flow-studio\\ugc-flow-studio\\storage\\uploads\\phf0jb_Wanita_tersenyum_di_depan_cermin_20260915094054.mp4",
+      "url": "/api/files/uploads/phf0jb_Wanita_tersenyum_di_depan_cermin_20260915094054.mp4",
+      "size": 2255274,
+      "source": "flow_download",
+      "tags": [],
+      "meta": {}
+    }
+  ],
+  "jobs": [
+    {
+      "id": "job_lyddbailll",
+      "createdAt": "2026-09-17T08:29:45.696Z",
+      "updatedAt": "2026-09-17T08:31:57.604Z",
+      "type": "ugc.render",
+      "title": "UGC Flow: Serum Glad2Glow",
+      "status": "done",
+      "progress": 100,
+      "stage": "Selesai",
+      "lane": "low",
+      "priority": 0,
+      "payload": {
+        "product": "Serum Glad2Glow",
+        "problem": "jerawat aktif, kulit kusam, noda hitam (hiperpigmentasi), tekstur kulit kasar, hingga tanda penuaan dini",
+        "benefits": "Mencerahkan kulit kusam, menyamarkan noda hitam bekas jerawat, merawat kulit berjerawat, menenangkan kemerahan, mengangkat sel kulit mati (eksfoliasi), menghaluskan tekstur kulit, menjaga kelembapan kulit, memperkuat skin barrier, mencegah tanda penuaan dini, formula ringan cepat meresap, harga sangat terjangkau, ramah untuk pemula.",
+        "voice": "nadia",
+        "script": {
+          "source": "local",
+          "title": "Serum Glad2Glow - Review jujur",
+          "hook": "Jangan beli Serum Glad2Glow sebelum lihat video ini.",
+          "angle": "review-jujur",
+          "persona": "gen-z-casual",
+          "voice": "nadia",
+          "scenes": [
+            {
+              "index": 1,
+              "narration": "Jangan beli Serum Glad2Glow sebelum lihat video ini.",
+              "onScreenText": "Jangan beli Serum Glad2Glow sebelum lihat vide",
+              "visual": "perbandingan sisi kiri dan kanan menampilkan perbedaan hasil",
+              "motion": "pandown",
+              "duration": 5
+            },
+            {
+              "index": 2,
+              "narration": "Masalahnya bukan cuma bikin ribet, tapi juga bikin gak percaya diri.",
+              "onScreenText": "Masalahnya bukan cuma bikin ribet, tapi juga",
+              "visual": "produk dengan latar warna solid, gaya iklan bersih",
+              "motion": "zoomin",
+              "duration": 6
+            },
+            {
+              "index": 3,
+              "narration": "Terus aku dikenalin Serum Glad2Glow sama teman yang udah pakai lama.",
+              "onScreenText": "Terus aku dikenalin Serum Glad2Glow sama teman",
+              "visual": "flat lay produk beserta kemasan dan bonus",
+              "motion": "panright",
+              "duration": 6
+            },
+            {
+              "index": 4,
+              "narration": "Bonusnya, Mencerahkan kulit kusam. Buat harga segini, worth it banget.",
+              "onScreenText": "Bonusnya, Mencerahkan kulit kusam. Buat harga segini,",
+              "visual": "ekspresi puas setelah memakai produk, cahaya hangat",
+              "motion": "zoomout",
+              "duration": 5
+            },
+            {
+              "index": 5,
+              "narration": "Cek link di bio",
+              "onScreenText": "Cek link di bio",
+              "visual": "close up produk di tangan dengan cahaya jendela lembut",
+              "motion": "panleft",
+              "duration": 5
+            }
+          ],
+          "caption": "Jangan beli Serum Glad2Glow sebelum lihat video ini. Mencerahkan kulit kusam. Cek link di bio",
+          "hashtags": "#ugc #review #fyp",
+          "cta": "Cek link di bio"
+        },
+        "assetIds": [
+          "as_idcqe17n7f"
+        ],
+        "mode": "local",
+        "aspect": "9:16",
+        "resolution": "1080",
+        "fps": 30,
+        "subtitleStyle": "none",
+        "musicMood": "lofi",
+        "naturalPreset": "casual",
+        "variants": 1,
+        "source": "flow_download"
+      },
+      "logs": [
+        {
+          "at": "2026-09-17T08:29:45.800Z",
+          "message": "Skrip siap: 5 scene (sumber: local)"
+        }
+      ],
+      "result": {
+        "videoId": "vid_ti7gr124s5",
+        "url": "/api/files/renders/final/ugc_rtj3n7n1.mp4",
+        "title": "Serum Glad2Glow - Review jujur",
+        "duration": 30.1,
+        "thumbUrl": "/api/files/thumbs/thumb_jgc9ssjv.jpg",
+        "caption": "Jangan beli Serum Glad2Glow sebelum lihat video ini. Terus aku dikenalin Serum Glad2Glow sama teman yang udah pakai lama. Cek link di bio",
+        "hashtags": "#ugc #review #fyp",
+        "scriptId": "scr_swam9smv4x",
+        "simulated": false
+      },
+      "error": null,
+      "retries": 0,
+      "maxRetries": 1,
+      "source": "flow_download",
+      "automationId": null,
+      "startedAt": "2026-09-17T08:29:45.798Z",
+      "finishedAt": "2026-09-17T08:31:57.604Z"
+    },
+    {
+      "id": "job_4iuli5sdlj",
+      "createdAt": "2026-09-17T09:13:20.136Z",
+      "updatedAt": "2026-09-17T09:15:50.130Z",
+      "type": "ugc.render",
+      "title": "UGC Flow: Serum Glad2Glow",
+      "status": "done",
+      "progress": 100,
+      "stage": "Selesai",
+      "lane": "low",
+      "priority": 0,
+      "payload": {
+        "product": "Serum Glad2Glow",
+        "problem": "jerawat aktif, kulit kusam, noda hitam (hiperpigmentasi), tekstur kulit kasar, hingga tanda penuaan dini",
+        "benefits": "Mencerahkan kulit kusam, menyamarkan noda hitam bekas jerawat, merawat kulit berjerawat, menenangkan kemerahan, mengangkat sel kulit mati (eksfoliasi), menghaluskan tekstur kulit, menjaga kelembapan kulit, memperkuat skin barrier, mencegah tanda penuaan dini, formula ringan cepat meresap, harga sangat terjangkau, ramah untuk pemula.",
+        "voice": "nadia",
+        "script": {
+          "source": "local",
+          "title": "Serum Glad2Glow - Review jujur",
+          "hook": "Jangan beli Serum Glad2Glow sebelum lihat video ini.",
+          "angle": "review-jujur",
+          "persona": "gen-z-casual",
+          "voice": "nadia",
+          "scenes": [
+            {
+              "index": 1,
+              "narration": "Jangan beli Serum Glad2Glow sebelum lihat video ini.",
+              "onScreenText": "Jangan beli Serum Glad2Glow sebelum lihat vide",
+              "visual": "perbandingan sisi kiri dan kanan menampilkan perbedaan hasil",
+              "motion": "pandown",
+              "duration": 5
+            },
+            {
+              "index": 2,
+              "narration": "Masalahnya bukan cuma bikin ribet, tapi juga bikin gak percaya diri.",
+              "onScreenText": "Masalahnya bukan cuma bikin ribet, tapi juga",
+              "visual": "produk dengan latar warna solid, gaya iklan bersih",
+              "motion": "zoomin",
+              "duration": 6
+            },
+            {
+              "index": 3,
+              "narration": "Terus aku dikenalin Serum Glad2Glow sama teman yang udah pakai lama.",
+              "onScreenText": "Terus aku dikenalin Serum Glad2Glow sama teman",
+              "visual": "flat lay produk beserta kemasan dan bonus",
+              "motion": "panright",
+              "duration": 6
+            },
+            {
+              "index": 4,
+              "narration": "Bonusnya, Mencerahkan kulit kusam. Buat harga segini, worth it banget.",
+              "onScreenText": "Bonusnya, Mencerahkan kulit kusam. Buat harga segini,",
+              "visual": "ekspresi puas setelah memakai produk, cahaya hangat",
+              "motion": "zoomout",
+              "duration": 5
+            },
+            {
+              "index": 5,
+              "narration": "Cek link di bio",
+              "onScreenText": "Cek link di bio",
+              "visual": "close up produk di tangan dengan cahaya jendela lembut",
+              "motion": "panleft",
+              "duration": 5
+            }
+          ],
+          "caption": "Jangan beli Serum Glad2Glow sebelum lihat video ini. Mencerahkan kulit kusam. Cek link di bio",
+          "hashtags": "#ugc #review #fyp",
+          "cta": "Cek link di bio"
+        },
+        "assetIds": [
+          "as_kew41t3kpq"
+        ],
+        "mode": "local",
+        "aspect": "9:16",
+        "resolution": "1080",
+        "fps": 30,
+        "subtitleStyle": "none",
+        "musicMood": "lofi",
+        "naturalPreset": "casual",
+        "variants": 1,
+        "source": "flow_download"
+      },
+      "logs": [
+        {
+          "at": "2026-09-17T09:13:20.194Z",
+          "message": "Skrip siap: 5 scene (sumber: local)"
+        }
+      ],
+      "result": {
+        "videoId": "vid_u0zohapr68",
+        "url": "/api/files/renders/final/ugc_a8c6h8tx.mp4",
+        "title": "Serum Glad2Glow - Review jujur",
+        "duration": 29.033333,
+        "thumbUrl": "/api/files/thumbs/thumb_guu1j0ub.jpg",
+        "caption": "Jangan beli Serum Glad2Glow sebelum lihat video ini. Terus aku dikenalin Serum Glad2Glow sama teman yang udah pakai lama. Cek link di bio",
+        "hashtags": "#ugc #review #fyp",
+        "scriptId": "scr_qiyajsbran",
+        "simulated": false
+      },
+      "error": null,
+      "retries": 0,
+      "maxRetries": 1,
+      "source": "flow_download",
+      "automationId": null,
+      "startedAt": "2026-09-17T09:13:20.188Z",
+      "finishedAt": "2026-09-17T09:15:50.130Z"
+    },
+    {
+      "id": "job_zfm1or5w6j",
+      "createdAt": "2026-09-17T07:42:38.932Z",
+      "updatedAt": "2026-09-17T07:46:05.279Z",
+      "type": "ugc.render",
+      "title": "UGC Flow: serum GLAD2GLOW",
+      "status": "done",
+      "progress": 100,
+      "stage": "Selesai",
+      "lane": "low",
+      "priority": 0,
+      "payload": {
+        "product": "serum GLAD2GLOW",
+        "problem": "jerawat meradang, kulit kusam, noda hitam bekas jerawat, hingga tanda penuaan dini.",
+        "benefits": "Menyamarkan noda hitam bekas jerawat (baik noda kemerahan/PIE maupun noda kehitaman/PIH) dan mencerahkan kulit kusam.",
+        "voice": "nadia",
+        "script": {
+          "source": "local",
+          "title": "serum GLAD2GLOW - Review jujur",
+          "hook": "Jangan beli serum GLAD2GLOW sebelum lihat video ini.",
+          "angle": "review-jujur",
+          "persona": "gen-z-casual",
+          "voice": "nadia",
+          "scenes": [
+            {
+              "index": 1,
+              "narration": "Jangan beli serum GLAD2GLOW sebelum lihat video ini.",
+              "onScreenText": "Jangan beli serum GLAD2GLOW sebelum lihat vide",
+              "visual": "perbandingan sisi kiri dan kanan menampilkan perbedaan hasil",
+              "motion": "pandown",
+              "duration": 5
+            },
+            {
+              "index": 2,
+              "narration": "Masalahnya bukan cuma bikin ribet, tapi juga bikin gak percaya diri.",
+              "onScreenText": "Masalahnya bukan cuma bikin ribet, tapi juga",
+              "visual": "produk dengan latar warna solid, gaya iklan bersih",
+              "motion": "zoomin",
+              "duration": 6
+            },
+            {
+              "index": 3,
+              "narration": "Terus aku dikenalin serum GLAD2GLOW sama teman yang udah pakai lama.",
+              "onScreenText": "Terus aku dikenalin serum GLAD2GLOW sama teman",
+              "visual": "flat lay produk beserta kemasan dan bonus",
+              "motion": "panright",
+              "duration": 6
+            },
+            {
+              "index": 4,
+              "narration": "Bonusnya, Menyamarkan noda hitam bekas jerawat (baik noda kemerahan/PIE maupun noda kehitaman/PIH) dan mencerahkan kulit kusam.. Buat harga segini, worth it banget.",
+              "onScreenText": "Bonusnya, Menyamarkan noda hitam bekas jerawat (baik",
+              "visual": "ekspresi puas setelah memakai produk, cahaya hangat",
+              "motion": "zoomout",
+              "duration": 10
+            },
+            {
+              "index": 5,
+              "narration": "Cek link di bio",
+              "onScreenText": "Cek link di bio",
+              "visual": "close up produk di tangan dengan cahaya jendela lembut",
+              "motion": "panleft",
+              "duration": 5
+            }
+          ],
+          "caption": "Jangan beli serum GLAD2GLOW sebelum lihat video ini. Menyamarkan noda hitam bekas jerawat (baik noda kemerahan/PIE maupun noda kehitaman/PIH) dan mencerahkan kulit kusam.. Cek link di bio",
+          "hashtags": "#ugc #review #fyp",
+          "cta": "Cek link di bio"
+        },
+        "assetIds": [
+          "as_y03ofq9oua"
+        ],
+        "mode": "local",
+        "aspect": "9:16",
+        "resolution": "1080",
+        "fps": 30,
+        "subtitleStyle": "bold-center",
+        "musicMood": "lofi",
+        "naturalPreset": "casual",
+        "variants": 1,
+        "source": "flow_download"
+      },
+      "logs": [
+        {
+          "at": "2026-09-17T07:42:38.971Z",
+          "message": "Skrip siap: 5 scene (sumber: local)"
+        }
+      ],
+      "result": {
+        "videoId": "vid_lat3vw41zo",
+        "url": "/api/files/renders/final/ugc_dhi8r06j.mp4",
+        "title": "serum GLAD2GLOW - Review jujur",
+        "duration": 39.033333,
+        "thumbUrl": "/api/files/thumbs/thumb_o1ztc12a.jpg",
+        "caption": "Jangan beli serum GLAD2GLOW sebelum lihat video ini. Terus aku dikenalin serum GLAD2GLOW sama teman yang udah pakai lama. Cek link di bio",
+        "hashtags": "#ugc #review #fyp",
+        "scriptId": "scr_pbt1enidce",
+        "simulated": false
+      },
+      "error": null,
+      "retries": 0,
+      "maxRetries": 1,
+      "source": "flow_download",
+      "automationId": null,
+      "startedAt": "2026-09-17T07:42:38.964Z",
+      "finishedAt": "2026-09-17T07:46:05.278Z"
+    }
+  ],
+  "videos": [
+    {
+      "id": "vid_ti7gr124s5",
+      "createdAt": "2026-09-17T08:31:57.581Z",
+      "updatedAt": "2026-09-17T08:31:57.581Z",
+      "title": "Serum Glad2Glow - Review jujur",
+      "type": "ugc",
+      "file": "C:\\Users\\HP\\Documents\\PROJEK\\ugc-flow-studio\\ugc-flow-studio\\storage\\renders\\final\\ugc_rtj3n7n1.mp4",
+      "url": "/api/files/renders/final/ugc_rtj3n7n1.mp4",
+      "thumbFile": "C:\\Users\\HP\\Documents\\PROJEK\\ugc-flow-studio\\ugc-flow-studio\\storage\\thumbs\\thumb_jgc9ssjv.jpg",
+      "thumbUrl": "/api/files/thumbs/thumb_jgc9ssjv.jpg",
+      "duration": 30.1,
+      "size": 8667931,
+      "width": 1080,
+      "height": 1920,
+      "aspect": "9:16",
+      "caption": "Jangan beli Serum Glad2Glow sebelum lihat video ini. Terus aku dikenalin Serum Glad2Glow sama teman yang udah pakai lama. Cek link di bio",
+      "hashtags": "#ugc #review #fyp",
+      "voice": "nadia",
+      "lane": "low",
+      "mode": "local",
+      "simulated": false,
+      "scriptId": "scr_swam9smv4x",
+      "jobId": "job_lyddbailll"
+    },
+    {
+      "id": "vid_u0zohapr68",
+      "createdAt": "2026-09-17T09:15:50.111Z",
+      "updatedAt": "2026-09-17T09:15:50.111Z",
+      "title": "Serum Glad2Glow - Review jujur",
+      "type": "ugc",
+      "file": "C:\\Users\\HP\\Documents\\PROJEK\\ugc-flow-studio\\ugc-flow-studio\\storage\\renders\\final\\ugc_a8c6h8tx.mp4",
+      "url": "/api/files/renders/final/ugc_a8c6h8tx.mp4",
+      "thumbFile": "C:\\Users\\HP\\Documents\\PROJEK\\ugc-flow-studio\\ugc-flow-studio\\storage\\thumbs\\thumb_guu1j0ub.jpg",
+      "thumbUrl": "/api/files/thumbs/thumb_guu1j0ub.jpg",
+      "duration": 29.033333,
+      "size": 9099375,
+      "width": 1080,
+      "height": 1920,
+      "aspect": "9:16",
+      "caption": "Jangan beli Serum Glad2Glow sebelum lihat video ini. Terus aku dikenalin Serum Glad2Glow sama teman yang udah pakai lama. Cek link di bio",
+      "hashtags": "#ugc #review #fyp",
+      "voice": "nadia",
+      "lane": "low",
+      "mode": "local",
+      "simulated": false,
+      "scriptId": "scr_qiyajsbran",
+      "jobId": "job_4iuli5sdlj"
+    },
+    {
+      "id": "vid_lat3vw41zo",
+      "createdAt": "2026-09-17T07:46:05.256Z",
+      "updatedAt": "2026-09-17T07:46:05.256Z",
+      "title": "serum GLAD2GLOW - Review jujur",
+      "type": "ugc",
+      "file": "C:\\Users\\HP\\Documents\\PROJEK\\ugc-flow-studio\\ugc-flow-studio\\storage\\renders\\final\\ugc_dhi8r06j.mp4",
+      "url": "/api/files/renders/final/ugc_dhi8r06j.mp4",
+      "thumbFile": "C:\\Users\\HP\\Documents\\PROJEK\\ugc-flow-studio\\ugc-flow-studio\\storage\\thumbs\\thumb_o1ztc12a.jpg",
+      "thumbUrl": "/api/files/thumbs/thumb_o1ztc12a.jpg",
+      "duration": 39.033333,
+      "size": 11384370,
+      "width": 1080,
+      "height": 1920,
+      "aspect": "9:16",
+      "caption": "Jangan beli serum GLAD2GLOW sebelum lihat video ini. Terus aku dikenalin serum GLAD2GLOW sama teman yang udah pakai lama. Cek link di bio",
+      "hashtags": "#ugc #review #fyp",
+      "voice": "nadia",
+      "lane": "low",
+      "mode": "local",
+      "simulated": false,
+      "scriptId": "scr_pbt1enidce",
+      "jobId": "job_zfm1or5w6j"
+    },
+    {
+      "id": "vid_n2n4y4dj3a",
+      "createdAt": "2026-09-15T02:57:24.965Z",
+      "updatedAt": "2026-09-15T02:57:24.966Z",
+      "title": "serum GLAD2GLOW - Review jujur",
+      "type": "ugc",
+      "file": "C:\\Users\\HP\\Documents\\PROJEK\\ugc-flow-studio\\ugc-flow-studio\\storage\\renders\\final\\ugc_yfxiq6fl.mp4",
+      "url": "/api/files/renders/final/ugc_yfxiq6fl.mp4",
+      "thumbFile": "C:\\Users\\HP\\Documents\\PROJEK\\ugc-flow-studio\\ugc-flow-studio\\storage\\thumbs\\thumb_22mn1ico.jpg",
+      "thumbUrl": "/api/files/thumbs/thumb_22mn1ico.jpg",
+      "duration": 32,
+      "size": 8881397,
+      "width": 1080,
+      "height": 1920,
+      "aspect": "9:16",
+      "caption": "Jangan beli serum GLAD2GLOW sebelum lihat video ini. Terus aku dikenalin serum GLAD2GLOW sama teman yang udah pakai lama. Cek link di bio",
+      "hashtags": "#ugc #review #fyp",
+      "voice": "nadia",
+      "lane": "low",
+      "mode": "local",
+      "simulated": false,
+      "scriptId": "scr_3oai21jkrr",
+      "jobId": "job_9s742z095j"
+    },
+    {
+      "id": "vid_6rvubg0dt5",
+      "createdAt": "2026-09-15T02:49:16.566Z",
+      "updatedAt": "2026-09-15T02:49:16.566Z",
+      "title": "serum GLAD2GLOW - Review jujur",
+      "type": "ugc",
+      "file": "C:\\Users\\HP\\Documents\\PROJEK\\ugc-flow-studio\\ugc-flow-studio\\storage\\renders\\final\\ugc_c0qv2zkk.mp4",
+      "url": "/api/files/renders/final/ugc_c0qv2zkk.mp4",
+      "thumbFile": "C:\\Users\\HP\\Documents\\PROJEK\\ugc-flow-studio\\ugc-flow-studio\\storage\\thumbs\\thumb_0c55evu8.jpg",
+      "thumbUrl": "/api/files/thumbs/thumb_0c55evu8.jpg",
+      "duration": 32,
+      "size": 8881510,
+      "width": 1080,
+      "height": 1920,
+      "aspect": "9:16",
+      "caption": "Jangan beli serum GLAD2GLOW sebelum lihat video ini. Terus aku dikenalin serum GLAD2GLOW sama teman yang udah pakai lama. Cek link di bio",
+      "hashtags": "#ugc #review #fyp",
+      "voice": "nadia",
+      "lane": "low",
+      "mode": "local",
+      "simulated": false,
+      "scriptId": "scr_0opluzhujs",
+      "jobId": "job_5pbcx7iwyy"
+    },
+    {
+      "id": "vid_fqk1vpjx5a",
+      "createdAt": "2026-09-15T02:45:35.737Z",
+      "updatedAt": "2026-09-15T02:45:35.737Z",
+      "title": "serum GLAD2GLOW - Review jujur",
+      "type": "ugc",
+      "file": "C:\\Users\\HP\\Documents\\PROJEK\\ugc-flow-studio\\ugc-flow-studio\\storage\\renders\\final\\ugc_162pq806.mp4",
+      "url": "/api/files/renders/final/ugc_162pq806.mp4",
+      "thumbFile": "C:\\Users\\HP\\Documents\\PROJEK\\ugc-flow-studio\\ugc-flow-studio\\storage\\thumbs\\thumb_a5x9eh8t.jpg",
+      "thumbUrl": "/api/files/thumbs/thumb_a5x9eh8t.jpg",
+      "duration": 32,
+      "size": 4562805,
+      "width": 1080,
+      "height": 1920,
+      "aspect": "9:16",
+      "caption": "Jangan beli serum GLAD2GLOW sebelum lihat video ini. Terus aku dikenalin serum GLAD2GLOW sama teman yang udah pakai lama. Cek link di bio",
+      "hashtags": "#ugc #review #fyp",
+      "voice": "nadia",
+      "lane": "low",
+      "mode": "flow-video",
+      "simulated": true,
+      "scriptId": "scr_odr1vtf4h8",
+      "jobId": "job_m33prwkesl"
+    },
+    {
+      "id": "vid_kwav3oj9oc",
+      "createdAt": "2026-09-11T07:14:18.380Z",
+      "updatedAt": "2026-09-11T07:14:18.380Z",
+      "title": "serum GLAD2GLOW - Review jujur",
+      "type": "ugc",
+      "file": "C:\\Users\\HP\\Documents\\PROJEK\\ugc-flow-studio\\ugc-flow-studio\\storage\\renders\\final\\ugc_xu9ljwo7.mp4",
+      "url": "/api/files/renders/final/ugc_xu9ljwo7.mp4",
+      "thumbFile": "C:\\Users\\HP\\Documents\\PROJEK\\ugc-flow-studio\\ugc-flow-studio\\storage\\thumbs\\thumb_0x05fubc.jpg",
+      "thumbUrl": "/api/files/thumbs/thumb_0x05fubc.jpg",
+      "duration": 32,
+      "size": 946010,
+      "width": 1080,
+      "height": 1920,
+      "aspect": "9:16",
+      "caption": "Jangan beli serum GLAD2GLOW sebelum lihat video ini. Terus aku dikenalin serum GLAD2GLOW sama teman yang udah pakai lama. Cek link di bio",
+      "hashtags": "#ugc #review #fyp",
+      "voice": "nadia",
+      "lane": "low",
+      "mode": "flow-video",
+      "simulated": true,
+      "scriptId": "scr_ih9ftmqobf",
+      "jobId": "job_yd1bthdlim"
+    },
+    {
+      "id": "vid_ezdj3ant1w",
+      "createdAt": "2026-09-11T07:12:09.246Z",
+      "updatedAt": "2026-09-11T07:12:09.246Z",
+      "title": "serum GLAD2GLOW - Review jujur",
+      "type": "ugc",
+      "file": "C:\\Users\\HP\\Documents\\PROJEK\\ugc-flow-studio\\ugc-flow-studio\\storage\\renders\\final\\ugc_1impqlsj.mp4",
+      "url": "/api/files/renders/final/ugc_1impqlsj.mp4",
+      "thumbFile": "C:\\Users\\HP\\Documents\\PROJEK\\ugc-flow-studio\\ugc-flow-studio\\storage\\thumbs\\thumb_bgw7xm9o.jpg",
+      "thumbUrl": "/api/files/thumbs/thumb_bgw7xm9o.jpg",
+      "duration": 32,
+      "size": 4498099,
+      "width": 1080,
+      "height": 1920,
+      "aspect": "9:16",
+      "caption": "Jangan beli serum GLAD2GLOW sebelum lihat video ini. Terus aku dikenalin serum GLAD2GLOW sama teman yang udah pakai lama. Cek link di bio",
+      "hashtags": "#ugc #review #fyp",
+      "voice": "sari",
+      "lane": "low",
+      "mode": "flow-video",
+      "simulated": true,
+      "scriptId": "scr_gej0oc7a8c",
+      "jobId": "job_lh1k64se3k"
+    },
+    {
+      "id": "vid_7pvcre7dfl",
+      "createdAt": "2026-09-11T07:12:09.086Z",
+      "updatedAt": "2026-09-11T07:12:09.086Z",
+      "title": "serum GLAD2GLOW - Review jujur",
+      "type": "ugc",
+      "file": "C:\\Users\\HP\\Documents\\PROJEK\\ugc-flow-studio\\ugc-flow-studio\\storage\\renders\\final\\ugc_qkrxpk29.mp4",
+      "url": "/api/files/renders/final/ugc_qkrxpk29.mp4",
+      "thumbFile": "C:\\Users\\HP\\Documents\\PROJEK\\ugc-flow-studio\\ugc-flow-studio\\storage\\thumbs\\thumb_xmnt8gyh.jpg",
+      "thumbUrl": "/api/files/thumbs/thumb_xmnt8gyh.jpg",
+      "duration": 32,
+      "size": 4497967,
+      "width": 1080,
+      "height": 1920,
+      "aspect": "9:16",
+      "caption": "Jangan beli serum GLAD2GLOW sebelum lihat video ini. Terus aku dikenalin serum GLAD2GLOW sama teman yang udah pakai lama. Cek link di bio",
+      "hashtags": "#ugc #review #fyp",
+      "voice": "sari",
+      "lane": "low",
+      "mode": "flow-video",
+      "simulated": true,
+      "scriptId": "scr_rqzm9mr7q9",
+      "jobId": "job_0vr1cbxffi"
+    }
+  ],
+  "audios": [],
+  "scripts": [
+    {
+      "id": "scr_swam9smv4x",
+      "createdAt": "2026-09-17T08:31:57.579Z",
+      "updatedAt": "2026-09-17T08:31:57.579Z",
+      "title": "Serum Glad2Glow - Review jujur",
+      "product": "Serum Glad2Glow",
+      "angle": "review-jujur",
+      "persona": "gen-z-casual",
+      "source": "local",
+      "hook": "Jangan beli Serum Glad2Glow sebelum lihat video ini.",
+      "scenes": [
+        {
+          "index": 1,
+          "narration": "Jangan beli Serum Glad2Glow sebelum lihat video ini.",
+          "onScreenText": "Jangan beli Serum Glad2Glow sebelum lihat vide",
+          "visual": "perbandingan sisi kiri dan kanan menampilkan perbedaan hasil",
+          "motion": "pandown",
+          "duration": 5
+        },
+        {
+          "index": 2,
+          "narration": "Masalahnya bukan cuma bikin ribet, tapi juga bikin gak percaya diri.",
+          "onScreenText": "Masalahnya bukan cuma bikin ribet, tapi juga",
+          "visual": "produk dengan latar warna solid, gaya iklan bersih",
+          "motion": "zoomin",
+          "duration": 6
+        },
+        {
+          "index": 3,
+          "narration": "Terus aku dikenalin Serum Glad2Glow sama teman yang udah pakai lama.",
+          "onScreenText": "Terus aku dikenalin Serum Glad2Glow sama teman",
+          "visual": "flat lay produk beserta kemasan dan bonus",
+          "motion": "panright",
+          "duration": 6
+        },
+        {
+          "index": 4,
+          "narration": "Bonusnya, Mencerahkan kulit kusam. Buat harga segini, worth it banget.",
+          "onScreenText": "Bonusnya, Mencerahkan kulit kusam. Buat harga segini,",
+          "visual": "ekspresi puas setelah memakai produk, cahaya hangat",
+          "motion": "zoomout",
+          "duration": 5
+        },
+        {
+          "index": 5,
+          "narration": "Cek link di bio",
+          "onScreenText": "Cek link di bio",
+          "visual": "close up produk di tangan dengan cahaya jendela lembut",
+          "motion": "panleft",
+          "duration": 5
+        }
+      ],
+      "caption": "Jangan beli Serum Glad2Glow sebelum lihat video ini. Terus aku dikenalin Serum Glad2Glow sama teman yang udah pakai lama. Cek link di bio",
+      "hashtags": "#ugc #review #fyp",
+      "jobId": "job_lyddbailll"
+    },
+    {
+      "id": "scr_qiyajsbran",
+      "createdAt": "2026-09-17T09:15:50.109Z",
+      "updatedAt": "2026-09-17T09:15:50.109Z",
+      "title": "Serum Glad2Glow - Review jujur",
+      "product": "Serum Glad2Glow",
+      "angle": "review-jujur",
+      "persona": "gen-z-casual",
+      "source": "local",
+      "hook": "Jangan beli Serum Glad2Glow sebelum lihat video ini.",
+      "scenes": [
+        {
+          "index": 1,
+          "narration": "Jangan beli Serum Glad2Glow sebelum lihat video ini.",
+          "onScreenText": "Jangan beli Serum Glad2Glow sebelum lihat vide",
+          "visual": "perbandingan sisi kiri dan kanan menampilkan perbedaan hasil",
+          "motion": "pandown",
+          "duration": 5
+        },
+        {
+          "index": 2,
+          "narration": "Masalahnya bukan cuma bikin ribet, tapi juga bikin gak percaya diri.",
+          "onScreenText": "Masalahnya bukan cuma bikin ribet, tapi juga",
+          "visual": "produk dengan latar warna solid, gaya iklan bersih",
+          "motion": "zoomin",
+          "duration": 6
+        },
+        {
+          "index": 3,
+          "narration": "Terus aku dikenalin Serum Glad2Glow sama teman yang udah pakai lama.",
+          "onScreenText": "Terus aku dikenalin Serum Glad2Glow sama teman",
+          "visual": "flat lay produk beserta kemasan dan bonus",
+          "motion": "panright",
+          "duration": 6
+        },
+        {
+          "index": 4,
+          "narration": "Bonusnya, Mencerahkan kulit kusam. Buat harga segini, worth it banget.",
+          "onScreenText": "Bonusnya, Mencerahkan kulit kusam. Buat harga segini,",
+          "visual": "ekspresi puas setelah memakai produk, cahaya hangat",
+          "motion": "zoomout",
+          "duration": 5
+        },
+        {
+          "index": 5,
+          "narration": "Cek link di bio",
+          "onScreenText": "Cek link di bio",
+          "visual": "close up produk di tangan dengan cahaya jendela lembut",
+          "motion": "panleft",
+          "duration": 5
+        }
+      ],
+      "caption": "Jangan beli Serum Glad2Glow sebelum lihat video ini. Terus aku dikenalin Serum Glad2Glow sama teman yang udah pakai lama. Cek link di bio",
+      "hashtags": "#ugc #review #fyp",
+      "jobId": "job_4iuli5sdlj"
+    },
+    {
+      "id": "scr_pbt1enidce",
+      "createdAt": "2026-09-17T07:46:05.254Z",
+      "updatedAt": "2026-09-17T07:46:05.254Z",
+      "title": "serum GLAD2GLOW - Review jujur",
+      "product": "serum GLAD2GLOW",
+      "angle": "review-jujur",
+      "persona": "gen-z-casual",
+      "source": "local",
+      "hook": "Jangan beli serum GLAD2GLOW sebelum lihat video ini.",
+      "scenes": [
+        {
+          "index": 1,
+          "narration": "Jangan beli serum GLAD2GLOW sebelum lihat video ini.",
+          "onScreenText": "Jangan beli serum GLAD2GLOW sebelum lihat vide",
+          "visual": "perbandingan sisi kiri dan kanan menampilkan perbedaan hasil",
+          "motion": "pandown",
+          "duration": 5
+        },
+        {
+          "index": 2,
+          "narration": "Masalahnya bukan cuma bikin ribet, tapi juga bikin gak percaya diri.",
+          "onScreenText": "Masalahnya bukan cuma bikin ribet, tapi juga",
+          "visual": "produk dengan latar warna solid, gaya iklan bersih",
+          "motion": "zoomin",
+          "duration": 6
+        },
+        {
+          "index": 3,
+          "narration": "Terus aku dikenalin serum GLAD2GLOW sama teman yang udah pakai lama.",
+          "onScreenText": "Terus aku dikenalin serum GLAD2GLOW sama teman",
+          "visual": "flat lay produk beserta kemasan dan bonus",
+          "motion": "panright",
+          "duration": 6
+        },
+        {
+          "index": 4,
+          "narration": "Bonusnya, Menyamarkan noda hitam bekas jerawat (baik noda kemerahan/PIE maupun noda kehitaman/PIH) dan mencerahkan kulit kusam.. Buat harga segini, worth it banget.",
+          "onScreenText": "Bonusnya, Menyamarkan noda hitam bekas jerawat (baik",
+          "visual": "ekspresi puas setelah memakai produk, cahaya hangat",
+          "motion": "zoomout",
+          "duration": 10
+        },
+        {
+          "index": 5,
+          "narration": "Cek link di bio",
+          "onScreenText": "Cek link di bio",
+          "visual": "close up produk di tangan dengan cahaya jendela lembut",
+          "motion": "panleft",
+          "duration": 5
+        }
+      ],
+      "caption": "Jangan beli serum GLAD2GLOW sebelum lihat video ini. Terus aku dikenalin serum GLAD2GLOW sama teman yang udah pakai lama. Cek link di bio",
+      "hashtags": "#ugc #review #fyp",
+      "jobId": "job_zfm1or5w6j"
+    },
+    {
+      "id": "scr_w8txnc8x3d",
+      "createdAt": "2026-09-15T02:27:14.533Z",
+      "updatedAt": "2026-09-15T02:27:14.533Z",
+      "title": "serum GLAD2GLOW - Review jujur",
+      "product": "serum GLAD2GLOW",
+      "angle": "review-jujur",
+      "persona": "gen-z-casual",
+      "source": "local",
+      "hook": "Jangan beli serum GLAD2GLOW sebelum lihat video ini.",
+      "scenes": [
+        {
+          "index": 1,
+          "narration": "Jangan beli serum GLAD2GLOW sebelum lihat video ini.",
+          "onScreenText": "Jangan beli serum GLAD2GLOW sebelum lihat vide",
+          "visual": "perbandingan sisi kiri dan kanan menampilkan perbedaan hasil",
+          "motion": "pandown",
+          "duration": 5
+        },
+        {
+          "index": 2,
+          "narration": "Masalahnya bukan cuma bikin ribet, tapi juga bikin gak percaya diri.",
+          "onScreenText": "Masalahnya bukan cuma bikin ribet, tapi juga",
+          "visual": "produk dengan latar warna solid, gaya iklan bersih",
+          "motion": "zoomin",
+          "duration": 6
+        },
+        {
+          "index": 3,
+          "narration": "Terus aku dikenalin serum GLAD2GLOW sama teman yang udah pakai lama.",
+          "onScreenText": "Terus aku dikenalin serum GLAD2GLOW sama teman",
+          "visual": "flat lay produk beserta kemasan dan bonus",
+          "motion": "panright",
+          "duration": 6
+        },
+        {
+          "index": 4,
+          "narration": "Bonusnya, Menyamarkan noda hitam bekas jerawat (baik noda kemerahan/PIE maupun noda kehitaman/PIH) dan mencerahkan kulit kusam.. Buat harga segini, worth it banget.",
+          "onScreenText": "Bonusnya, Menyamarkan noda hitam bekas jerawat (baik",
+          "visual": "ekspresi puas setelah memakai produk, cahaya hangat",
+          "motion": "zoomout",
+          "duration": 10
+        },
+        {
+          "index": 5,
+          "narration": "Cek link di bio",
+          "onScreenText": "Cek link di bio",
+          "visual": "close up produk di tangan dengan cahaya jendela lembut",
+          "motion": "panleft",
+          "duration": 5
+        }
+      ],
+      "caption": "Jangan beli serum GLAD2GLOW sebelum lihat video ini. Terus aku dikenalin serum GLAD2GLOW sama teman yang udah pakai lama. Cek link di bio",
+      "hashtags": "#ugc #review #fyp",
+      "jobId": "job_pwwpygi65d"
+    },
+    {
+      "id": "scr_3oai21jkrr",
+      "createdAt": "2026-09-15T02:57:24.965Z",
+      "updatedAt": "2026-09-15T02:57:24.965Z",
+      "title": "serum GLAD2GLOW - Review jujur",
+      "product": "serum GLAD2GLOW",
+      "angle": "review-jujur",
+      "persona": "gen-z-casual",
+      "source": "local",
+      "hook": "Jangan beli serum GLAD2GLOW sebelum lihat video ini.",
+      "scenes": [
+        {
+          "index": 1,
+          "narration": "Jangan beli serum GLAD2GLOW sebelum lihat video ini.",
+          "onScreenText": "Jangan beli serum GLAD2GLOW sebelum lihat vide",
+          "visual": "perbandingan sisi kiri dan kanan menampilkan perbedaan hasil",
+          "motion": "pandown",
+          "duration": 5
+        },
+        {
+          "index": 2,
+          "narration": "Masalahnya bukan cuma bikin ribet, tapi juga bikin gak percaya diri.",
+          "onScreenText": "Masalahnya bukan cuma bikin ribet, tapi juga",
+          "visual": "produk dengan latar warna solid, gaya iklan bersih",
+          "motion": "zoomin",
+          "duration": 6
+        },
+        {
+          "index": 3,
+          "narration": "Terus aku dikenalin serum GLAD2GLOW sama teman yang udah pakai lama.",
+          "onScreenText": "Terus aku dikenalin serum GLAD2GLOW sama teman",
+          "visual": "flat lay produk beserta kemasan dan bonus",
+          "motion": "panright",
+          "duration": 6
+        },
+        {
+          "index": 4,
+          "narration": "Bonusnya, Menyamarkan noda hitam bekas jerawat (baik noda kemerahan/PIE maupun noda kehitaman/PIH) dan mencerahkan kulit kusam.. Buat harga segini, worth it banget.",
+          "onScreenText": "Bonusnya, Menyamarkan noda hitam bekas jerawat (baik",
+          "visual": "ekspresi puas setelah memakai produk, cahaya hangat",
+          "motion": "zoomout",
+          "duration": 10
+        },
+        {
+          "index": 5,
+          "narration": "Cek link di bio",
+          "onScreenText": "Cek link di bio",
+          "visual": "close up produk di tangan dengan cahaya jendela lembut",
+          "motion": "panleft",
+          "duration": 5
+        }
+      ],
+      "caption": "Jangan beli serum GLAD2GLOW sebelum lihat video ini. Terus aku dikenalin serum GLAD2GLOW sama teman yang udah pakai lama. Cek link di bio",
+      "hashtags": "#ugc #review #fyp",
+      "jobId": "job_9s742z095j"
+    },
+    {
+      "id": "scr_0opluzhujs",
+      "createdAt": "2026-09-15T02:49:16.565Z",
+      "updatedAt": "2026-09-15T02:49:16.565Z",
+      "title": "serum GLAD2GLOW - Review jujur",
+      "product": "serum GLAD2GLOW",
+      "angle": "review-jujur",
+      "persona": "gen-z-casual",
+      "source": "local",
+      "hook": "Jangan beli serum GLAD2GLOW sebelum lihat video ini.",
+      "scenes": [
+        {
+          "index": 1,
+          "narration": "Jangan beli serum GLAD2GLOW sebelum lihat video ini.",
+          "onScreenText": "Jangan beli serum GLAD2GLOW sebelum lihat vide",
+          "visual": "perbandingan sisi kiri dan kanan menampilkan perbedaan hasil",
+          "motion": "pandown",
+          "duration": 5
+        },
+        {
+          "index": 2,
+          "narration": "Masalahnya bukan cuma bikin ribet, tapi juga bikin gak percaya diri.",
+          "onScreenText": "Masalahnya bukan cuma bikin ribet, tapi juga",
+          "visual": "produk dengan latar warna solid, gaya iklan bersih",
+          "motion": "zoomin",
+          "duration": 6
+        },
+        {
+          "index": 3,
+          "narration": "Terus aku dikenalin serum GLAD2GLOW sama teman yang udah pakai lama.",
+          "onScreenText": "Terus aku dikenalin serum GLAD2GLOW sama teman",
+          "visual": "flat lay produk beserta kemasan dan bonus",
+          "motion": "panright",
+          "duration": 6
+        },
+        {
+          "index": 4,
+          "narration": "Bonusnya, Menyamarkan noda hitam bekas jerawat (baik noda kemerahan/PIE maupun noda kehitaman/PIH) dan mencerahkan kulit kusam.. Buat harga segini, worth it banget.",
+          "onScreenText": "Bonusnya, Menyamarkan noda hitam bekas jerawat (baik",
+          "visual": "ekspresi puas setelah memakai produk, cahaya hangat",
+          "motion": "zoomout",
+          "duration": 10
+        },
+        {
+          "index": 5,
+          "narration": "Cek link di bio",
+          "onScreenText": "Cek link di bio",
+          "visual": "close up produk di tangan dengan cahaya jendela lembut",
+          "motion": "panleft",
+          "duration": 5
+        }
+      ],
+      "caption": "Jangan beli serum GLAD2GLOW sebelum lihat video ini. Terus aku dikenalin serum GLAD2GLOW sama teman yang udah pakai lama. Cek link di bio",
+      "hashtags": "#ugc #review #fyp",
+      "jobId": "job_5pbcx7iwyy"
+    },
+    {
+      "id": "scr_odr1vtf4h8",
+      "createdAt": "2026-09-15T02:45:35.736Z",
+      "updatedAt": "2026-09-15T02:45:35.736Z",
+      "title": "serum GLAD2GLOW - Review jujur",
+      "product": "serum GLAD2GLOW",
+      "angle": "review-jujur",
+      "persona": "gen-z-casual",
+      "source": "local",
+      "hook": "Jangan beli serum GLAD2GLOW sebelum lihat video ini.",
+      "scenes": [
+        {
+          "index": 1,
+          "narration": "Jangan beli serum GLAD2GLOW sebelum lihat video ini.",
+          "onScreenText": "Jangan beli serum GLAD2GLOW sebelum lihat vide",
+          "visual": "perbandingan sisi kiri dan kanan menampilkan perbedaan hasil",
+          "motion": "pandown",
+          "duration": 5
+        },
+        {
+          "index": 2,
+          "narration": "Masalahnya bukan cuma bikin ribet, tapi juga bikin gak percaya diri.",
+          "onScreenText": "Masalahnya bukan cuma bikin ribet, tapi juga",
+          "visual": "produk dengan latar warna solid, gaya iklan bersih",
+          "motion": "zoomin",
+          "duration": 6
+        },
+        {
+          "index": 3,
+          "narration": "Terus aku dikenalin serum GLAD2GLOW sama teman yang udah pakai lama.",
+          "onScreenText": "Terus aku dikenalin serum GLAD2GLOW sama teman",
+          "visual": "flat lay produk beserta kemasan dan bonus",
+          "motion": "panright",
+          "duration": 6
+        },
+        {
+          "index": 4,
+          "narration": "Bonusnya, Menyamarkan noda hitam bekas jerawat (baik noda kemerahan/PIE maupun noda kehitaman/PIH) dan mencerahkan kulit kusam.. Buat harga segini, worth it banget.",
+          "onScreenText": "Bonusnya, Menyamarkan noda hitam bekas jerawat (baik",
+          "visual": "ekspresi puas setelah memakai produk, cahaya hangat",
+          "motion": "zoomout",
+          "duration": 10
+        },
+        {
+          "index": 5,
+          "narration": "Cek link di bio",
+          "onScreenText": "Cek link di bio",
+          "visual": "close up produk di tangan dengan cahaya jendela lembut",
+          "motion": "panleft",
+          "duration": 5
+        }
+      ],
+      "caption": "Jangan beli serum GLAD2GLOW sebelum lihat video ini. Terus aku dikenalin serum GLAD2GLOW sama teman yang udah pakai lama. Cek link di bio",
+      "hashtags": "#ugc #review #fyp",
+      "jobId": "job_m33prwkesl"
+    },
+    {
+      "id": "scr_ih9ftmqobf",
+      "createdAt": "2026-09-11T07:14:18.379Z",
+      "updatedAt": "2026-09-11T07:14:18.379Z",
+      "title": "serum GLAD2GLOW - Review jujur",
+      "product": "serum GLAD2GLOW",
+      "angle": "review-jujur",
+      "persona": "gen-z-casual",
+      "source": "local",
+      "hook": "Jangan beli serum GLAD2GLOW sebelum lihat video ini.",
+      "scenes": [
+        {
+          "index": 1,
+          "narration": "Jangan beli serum GLAD2GLOW sebelum lihat video ini.",
+          "onScreenText": "Jangan beli serum GLAD2GLOW sebelum lihat vide",
+          "visual": "perbandingan sisi kiri dan kanan menampilkan perbedaan hasil",
+          "motion": "pandown",
+          "duration": 5
+        },
+        {
+          "index": 2,
+          "narration": "Masalahnya bukan cuma bikin ribet, tapi juga bikin gak percaya diri.",
+          "onScreenText": "Masalahnya bukan cuma bikin ribet, tapi juga",
+          "visual": "produk dengan latar warna solid, gaya iklan bersih",
+          "motion": "zoomin",
+          "duration": 6
+        },
+        {
+          "index": 3,
+          "narration": "Terus aku dikenalin serum GLAD2GLOW sama teman yang udah pakai lama.",
+          "onScreenText": "Terus aku dikenalin serum GLAD2GLOW sama teman",
+          "visual": "flat lay produk beserta kemasan dan bonus",
+          "motion": "panright",
+          "duration": 6
+        },
+        {
+          "index": 4,
+          "narration": "Bonusnya, Menyamarkan noda hitam bekas jerawat (baik noda kemerahan/PIE maupun noda kehitaman/PIH) dan mencerahkan kulit kusam.. Buat harga segini, worth it banget.",
+          "onScreenText": "Bonusnya, Menyamarkan noda hitam bekas jerawat (baik",
+          "visual": "ekspresi puas setelah memakai produk, cahaya hangat",
+          "motion": "zoomout",
+          "duration": 10
+        },
+        {
+          "index": 5,
+          "narration": "Cek link di bio",
+          "onScreenText": "Cek link di bio",
+          "visual": "close up produk di tangan dengan cahaya jendela lembut",
+          "motion": "panleft",
+          "duration": 5
+        }
+      ],
+      "caption": "Jangan beli serum GLAD2GLOW sebelum lihat video ini. Terus aku dikenalin serum GLAD2GLOW sama teman yang udah pakai lama. Cek link di bio",
+      "hashtags": "#ugc #review #fyp",
+      "jobId": "job_yd1bthdlim"
+    },
+    {
+      "id": "scr_gej0oc7a8c",
+      "createdAt": "2026-09-11T07:12:09.244Z",
+      "updatedAt": "2026-09-11T07:12:09.244Z",
+      "title": "serum GLAD2GLOW - Review jujur",
+      "product": "serum GLAD2GLOW",
+      "angle": "review-jujur",
+      "persona": "gen-z-casual",
+      "source": "local",
+      "hook": "Jangan beli serum GLAD2GLOW sebelum lihat video ini.",
+      "scenes": [
+        {
+          "index": 1,
+          "narration": "Jangan beli serum GLAD2GLOW sebelum lihat video ini.",
+          "onScreenText": "Jangan beli serum GLAD2GLOW sebelum lihat vide",
+          "visual": "perbandingan sisi kiri dan kanan menampilkan perbedaan hasil",
+          "motion": "pandown",
+          "duration": 5
+        },
+        {
+          "index": 2,
+          "narration": "Masalahnya bukan cuma bikin ribet, tapi juga bikin gak percaya diri.",
+          "onScreenText": "Masalahnya bukan cuma bikin ribet, tapi juga",
+          "visual": "produk dengan latar warna solid, gaya iklan bersih",
+          "motion": "zoomin",
+          "duration": 6
+        },
+        {
+          "index": 3,
+          "narration": "Terus aku dikenalin serum GLAD2GLOW sama teman yang udah pakai lama.",
+          "onScreenText": "Terus aku dikenalin serum GLAD2GLOW sama teman",
+          "visual": "flat lay produk beserta kemasan dan bonus",
+          "motion": "panright",
+          "duration": 6
+        },
+        {
+          "index": 4,
+          "narration": "Bonusnya, Menyamarkan noda hitam bekas jerawat (baik noda kemerahan/PIE maupun noda kehitaman/PIH) dan mencerahkan kulit kusam.. Buat harga segini, worth it banget.",
+          "onScreenText": "Bonusnya, Menyamarkan noda hitam bekas jerawat (baik",
+          "visual": "ekspresi puas setelah memakai produk, cahaya hangat",
+          "motion": "zoomout",
+          "duration": 10
+        },
+        {
+          "index": 5,
+          "narration": "Cek link di bio",
+          "onScreenText": "Cek link di bio",
+          "visual": "close up produk di tangan dengan cahaya jendela lembut",
+          "motion": "panleft",
+          "duration": 5
+        }
+      ],
+      "caption": "Jangan beli serum GLAD2GLOW sebelum lihat video ini. Terus aku dikenalin serum GLAD2GLOW sama teman yang udah pakai lama. Cek link di bio",
+      "hashtags": "#ugc #review #fyp",
+      "jobId": "job_lh1k64se3k"
+    },
+    {
+      "id": "scr_rqzm9mr7q9",
+      "createdAt": "2026-09-11T07:12:09.084Z",
+      "updatedAt": "2026-09-11T07:12:09.084Z",
+      "title": "serum GLAD2GLOW - Review jujur",
+      "product": "serum GLAD2GLOW",
+      "angle": "review-jujur",
+      "persona": "gen-z-casual",
+      "source": "local",
+      "hook": "Jangan beli serum GLAD2GLOW sebelum lihat video ini.",
+      "scenes": [
+        {
+          "index": 1,
+          "narration": "Jangan beli serum GLAD2GLOW sebelum lihat video ini.",
+          "onScreenText": "Jangan beli serum GLAD2GLOW sebelum lihat vide",
+          "visual": "perbandingan sisi kiri dan kanan menampilkan perbedaan hasil",
+          "motion": "pandown",
+          "duration": 5
+        },
+        {
+          "index": 2,
+          "narration": "Masalahnya bukan cuma bikin ribet, tapi juga bikin gak percaya diri.",
+          "onScreenText": "Masalahnya bukan cuma bikin ribet, tapi juga",
+          "visual": "produk dengan latar warna solid, gaya iklan bersih",
+          "motion": "zoomin",
+          "duration": 6
+        },
+        {
+          "index": 3,
+          "narration": "Terus aku dikenalin serum GLAD2GLOW sama teman yang udah pakai lama.",
+          "onScreenText": "Terus aku dikenalin serum GLAD2GLOW sama teman",
+          "visual": "flat lay produk beserta kemasan dan bonus",
+          "motion": "panright",
+          "duration": 6
+        },
+        {
+          "index": 4,
+          "narration": "Bonusnya, Menyamarkan noda hitam bekas jerawat (baik noda kemerahan/PIE maupun noda kehitaman/PIH) dan mencerahkan kulit kusam.. Buat harga segini, worth it banget.",
+          "onScreenText": "Bonusnya, Menyamarkan noda hitam bekas jerawat (baik",
+          "visual": "ekspresi puas setelah memakai produk, cahaya hangat",
+          "motion": "zoomout",
+          "duration": 10
+        },
+        {
+          "index": 5,
+          "narration": "Cek link di bio",
+          "onScreenText": "Cek link di bio",
+          "visual": "close up produk di tangan dengan cahaya jendela lembut",
+          "motion": "panleft",
+          "duration": 5
+        }
+      ],
+      "caption": "Jangan beli serum GLAD2GLOW sebelum lihat video ini. Terus aku dikenalin serum GLAD2GLOW sama teman yang udah pakai lama. Cek link di bio",
+      "hashtags": "#ugc #review #fyp",
+      "jobId": "job_0vr1cbxffi"
+    }
+  ],
+  "podcasts": [],
+  "streams": [],
+  "playlists": [],
+  "automations": [],
+  "schedules": [],
+  "apiKeys": [],
+  "webhooks": [],
+  "events": [],
+  "products": [
+    {
+      "id": "pro_hr14tme0cl",
+      "createdAt": "2026-09-14T02:39:08.030Z",
+      "updatedAt": "2026-09-14T02:39:08.030Z",
+      "name": "serum GLAD2GLOW",
+      "brief": {
+        "product": "serum GLAD2GLOW",
+        "problem": "jerawat meradang, kulit kusam, noda hitam bekas jerawat, hingga tanda penuaan dini.",
+        "benefits": "Menyamarkan noda hitam bekas jerawat (baik noda kemerahan/PIE maupun noda kehitaman/PIH) dan mencerahkan kulit kusam.",
+        "angle": "",
+        "persona": "",
+        "voice": "",
+        "sceneCount": 5,
+        "sceneDuration": 5
+      }
+    }
+  ],
+  "personas": [],
+  "templates": []
+}

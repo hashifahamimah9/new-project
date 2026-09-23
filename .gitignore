@@ -1,0 +1,23 @@
+# Node modules
+node_modules/
+
+# Local binaries & tools (large files)
+tools/node/
+tools/ffmpeg/
+tools/*.zip
+tools/*.exe
+
+# Storage media & temp
+storage/renders/final/*.mp4
+storage/uploads/*.mp4
+storage/tmp/
+storage/cache/
+cache/
+
+# Logs
+data/logs/*.log
+*.log
+
+# OS files
+Thumbs.db
+.DS_Store

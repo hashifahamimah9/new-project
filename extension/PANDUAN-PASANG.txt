@@ -1,0 +1,14 @@
+=====================================================
+  PANDUAN MEMASANG EKSTENSI UGC FLOW CONNECTOR DI CHROME
+=====================================================
+
+1. Buka browser Google Chrome Anda.
+2. Di address bar, ketik: chrome://extensions lalu tekan Enter.
+3. Di pojok kanan atas, AKTIFKAN tombol: "Developer mode" (Mode Pengembang).
+4. Di pojok kiri atas, klik tombol: "Load unpacked" (Muat yang belum dibongkar).
+5. Pilih folder ini:
+   C:\Users\HP\Documents\PROJEK\ugc-flow-studio\extension
+
+6. Selesai! Ekstensi "UGC Flow Connector" sekarang sudah terpasang.
+7. Buka website https://flow.google.com/ di Chrome Anda.
+   Panel "UGC Studio Assistant" akan otomatis muncul di pojok kanan bawah!

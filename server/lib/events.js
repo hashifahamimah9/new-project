@@ -4,7 +4,7 @@ const fs = require('fs')
 const path = require('path')
 const { EventEmitter } = require('events')
 const { PATHS } = require('./config')
-const { nowIso, dayKey } = require('./util')
+const { nowIso, dayKey, ensureDir } = require('./util')
 
 const bus = new EventEmitter()
 bus.setMaxListeners(0)
@@ -65,12 +65,29 @@ function log(level, scope, message, meta) {
 		entry.meta ? ` ${JSON.stringify(entry.meta)}` : ''
 	}\n`
 	try {
-		fs.appendFileSync(path.join(PATHS.logs, `${dayKey()}.log`), line)
+		fs.appendFileSync(path.join(ensureDir(PATHS.logs), `${dayKey()}.log`), line)
 	} catch (err) {
 		/* ignore disk errors */
 	}
 	if (process.env.QUIET !== 'true') process.stdout.write(line)
 	return emit('log', entry)
+}
+
+/** Hapus file log harian yang lebih tua dari `days` hari. */
+function pruneLogs(days = 14) {
+	let removed = 0
+	try {
+		const cutoff = Date.now() - days * 86400000
+		for (const name of fs.readdirSync(PATHS.logs)) {
+			if (!/^\d{4}-\d{2}-\d{2}\.log$/.test(name)) continue
+			const full = path.join(PATHS.logs, name)
+			if (fs.statSync(full).mtimeMs < cutoff) {
+				fs.unlinkSync(full)
+				removed += 1
+			}
+		}
+	} catch (err) {}
+	return removed
 }
 
 const logger = {
@@ -80,4 +97,4 @@ const logger = {
 	error: (scope, msg, meta) => log('error', scope, msg, meta),
 }
 
-module.exports = { bus, emit, addClient, clientCount, recent, log, logger }
+module.exports = { bus, emit, addClient, clientCount, recent, log, logger, pruneLogs }

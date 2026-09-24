@@ -7,15 +7,25 @@
     body { width: 320px; font-family: sans-serif; background: #15161A; color: #F0F2F5; margin: 0; padding: 16px; }
     h3 { margin: 0 0 8px 0; color: #5E9FE8; font-size: 15px; }
     p { font-size: 12px; color: #A0A5B5; margin: 0 0 14px 0; line-height: 1.4; }
+    label { display: block; font-size: 11px; color: #A0A5B5; margin: 0 0 4px 0; }
+    input { width: 100%; box-sizing: border-box; padding: 8px; border-radius: 6px; border: 1px solid #333844; background: #1D1F25; color: #F0F2F5; font-size: 12px; margin-bottom: 8px; }
     .btn { display: block; width: 100%; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 12px; border: none; cursor: pointer; text-align: center; text-decoration: none; box-sizing: border-box; }
     .btn-primary { background: #5E9FE8; color: #121316; margin-bottom: 8px; }
-    .btn-secondary { background: #252830; color: #D6DAE5; }
+    .btn-secondary { background: #252830; color: #D6DAE5; margin-bottom: 8px; }
+    .status { font-size: 12px; margin: 0 0 12px 0; }
+    .ok { color: #72BC8F; }
+    .bad { color: #E86A5E; }
   </style>
 </head>
 <body>
   <h3>🎬 UGC Flow Connector</h3>
   <p>Ekstensi ini menghubungkan skrip video dari UGC Studio langsung ke <strong>flow.google.com</strong>.</p>
+  <div class="status" id="status">Mengecek server...</div>
   <a href="https://flow.google.com/" target="_blank" class="btn btn-primary">Buka Google Flow ➔</a>
-  <a href="http://localhost:8787/#ugc" target="_blank" class="btn btn-secondary">Buka UGC Flow Studio</a>
+  <a href="http://localhost:8787/#ugc" target="_blank" class="btn btn-secondary" id="openStudio">Buka UGC Flow Studio</a>
+  <label for="serverUrl">Alamat server UGC Studio (ubah kalau PORT di .env diganti)</label>
+  <input id="serverUrl" placeholder="http://localhost:8787" />
+  <button type="button" class="btn btn-secondary" id="save">Simpan alamat</button>
+  <script src="popup.js"></script>
 </body>
 </html>

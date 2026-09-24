@@ -88,7 +88,7 @@ function titleCase(value) {
 		})
 }
 
-function toast(message, kind) {
+function toast(message, kind, ms) {
 	var host = $('toasts')
 	if (!host) return
 	var node = document.createElement('div')
@@ -100,7 +100,7 @@ function toast(message, kind) {
 		setTimeout(function () {
 			if (node.parentNode) node.parentNode.removeChild(node)
 		}, 400)
-	}, 4200)
+	}, ms || 4200)
 }
 
 async function api(path, options) {
@@ -122,6 +122,12 @@ async function api(path, options) {
 		data = text ? JSON.parse(text) : {}
 	} catch (err) {
 		data = { raw: text }
+	}
+	if (res.status === 401) {
+		setTimeout(function () {
+			location.reload()
+		}, 800)
+		throw new Error('Login diperlukan, memuat ulang halaman...')
 	}
 	if (!res.ok) throw new Error(data.error || data.message || 'HTTP ' + res.status)
 	return data
@@ -162,7 +168,7 @@ function optionList(value) {
 	return items
 }
 
-function fillSelect(id, source, current, placeholder) {
+function fillSelect(id, source, current, placeholder, keepUnknown) {
 	var node = $(id)
 	if (!node) return
 	if (node.tagName !== 'SELECT') {
@@ -176,8 +182,29 @@ function fillSelect(id, source, current, placeholder) {
 		html += '<option value="' + esc(item.value) + '">' + esc(item.label) + '</option>'
 	})
 	node.innerHTML = html
+	if (value && keepUnknown && !items.some(function (item) {
+		return String(item.value) === value
+	})) {
+		node.add(new Option(value, value))
+	}
 	if (value) node.value = value
 	if (!node.value && items.length && !placeholder) node.value = items[0].value
+}
+
+var RES_LABELS = { 480: '480p', 720: '720p (HD)', 1080: '1080p (Full HD)', 1440: '1440p (2K)', 2160: '2160p (4K)' }
+
+function resolutionOptions(list) {
+	return (list || []).map(function (value) {
+		return { id: String(value), label: RES_LABELS[value] || String(value) + 'p' }
+	})
+}
+
+function setTtsDot(mode, label, reason) {
+	var paid = Boolean(mode) && mode !== 'simulate'
+	var text = paid ? 'Voice ' + (label || mode) : label === 'Google TTS' ? 'Voice Google (gratis)' : 'Voice simulasi'
+	setDot('dotTts', 'modeTts', paid, text)
+	var node = $('modeTts')
+	if (node) node.title = reason || ''
 }
 
 function setDot(dotId, labelId, ok, label) {
@@ -253,6 +280,10 @@ function initSSE() {
 		var source = new EventSource('/api/events')
 		state.sse = source
 		source.onopen = function () {
+			if (state.sseTries > 0) {
+				loadJobs().catch(function () {})
+				if (state.view && state.view !== 'jobs') refreshView(state.view)
+			}
 			state.sseTries = 0
 			setDot('dotSse', 'modeSse', true, 'realtime')
 		}
@@ -279,6 +310,15 @@ function initSSE() {
 function handleEvent(type, data) {
 	if (!type) return
 	if (type.indexOf('job:') === 0) {
+		if (type === 'job:progress' || type === 'job:log') {
+			var jobId = data.jobId || (data.job && data.job.id)
+			var known = state.jobs.some(function (item) {
+				return item.id === jobId
+			})
+			if (type === 'job:progress' && known) upsertJob({ id: jobId, progress: data.progress, stage: data.stage })
+			if (type === 'job:log' && data.message && state.activeJob === jobId) appendJobLog(data.message)
+			return
+		}
 		var job = data.job || data
 		upsertJob(job)
 		if (type === 'job:done') {
@@ -304,20 +344,21 @@ function handleEvent(type, data) {
 	}
 	if (type === 'flow:download-detected') {
 		toast('🎉 Video dari Flow terdeteksi: ' + (data.file || ''), 'info')
-		var statusNode = $('flowIngestStatus')
-		if (statusNode) {
-			statusNode.style.display = 'block'
-			statusNode.innerHTML = '<strong>🎉 Video Flow Terdeteksi!</strong><p class="muted small">' + esc(data.file) + ' sedang di-import &amp; diolah...</p>'
+		var detectNode = $('flowIngestStatus')
+		if (detectNode) {
+			detectNode.style.display = 'block'
+			detectNode.innerHTML = '<strong>🎉 Video Flow Terdeteksi!</strong><p class="muted small">' + esc(data.file) + ' sedang di-import &amp; diolah...</p>'
 		}
 		return
 	}
 	if (type === 'flow:auto-render-started') {
 		toast('🎙️ Menggabungkan video Flow dengan suara AI...', 'info')
 		if (data.job) upsertJob(data.job)
-		var statusNode = $('flowIngestStatus')
-		if (statusNode) {
-			statusNode.style.display = 'block'
-			statusNode.innerHTML = '<strong>🎙️ Sedang Me-render Video UGC...</strong><p class="muted small">Menggabungkan video Flow + suara AI Nadia (bersih tanpa teks overlay). Hasil akan otomatis masuk ke Library!</p>'
+		var renderNode = $('flowIngestStatus')
+		if (renderNode) {
+			renderNode.style.display = 'block'
+			var clipCount = Array.isArray(data.clips) ? data.clips.length : Number(data.clips) || 0
+			renderNode.innerHTML = '<strong>🎙️ Sedang Me-render Video UGC...</strong><p class="muted small">Menggabungkan ' + (clipCount > 1 ? clipCount + ' klip ' : '') + 'video Flow + suara AI (bersih tanpa teks overlay). Hasil akan otomatis masuk ke Library!</p>'
 		}
 		return
 	}
@@ -342,6 +383,11 @@ function handleEvent(type, data) {
 	if (type === 'queue:paused') {
 		var button = $('btnPause')
 		if (button) button.textContent = data.paused ? 'Lanjutkan queue' : 'Pause queue'
+		return
+	}
+	if (type === 'library:updated') {
+		if (state.view === 'library') loadLibrary()
+		if (state.view === 'dashboard') loadDashboard()
 		return
 	}
 	if (type === 'log' && state.view === 'logs') loadLogs()
@@ -380,9 +426,8 @@ async function loadBootstrap() {
 	state.brand = data.brand || {}
 	state.presets = data.presets || {}
 	var flowOk = data.modes.flow === 'flow'
-	var ttsOk = data.modes.tts && data.modes.tts !== 'simulate'
 	setDot('dotFlow', 'modeFlow', flowOk, flowOk ? 'Flow Ultra' : 'Flow simulasi')
-	setDot('dotTts', 'modeTts', ttsOk, ttsOk ? 'Voice ' + data.modes.tts : 'Voice simulasi')
+	setTtsDot(data.modes.tts, data.modes.ttsProvider, data.modes.ttsReason)
 	if ($('brandSub')) $('brandSub').textContent = (state.brand.name || data.app.name) + ' - v' + data.app.version
 	if ($('inboxPath')) $('inboxPath').textContent = data.inboxPath || ''
 	if ($('ugcHint')) $('ugcHint').textContent = 'Maks upload ' + data.app.maxUploadMb + ' MB per file. Lane low = lower priority (unlimited).'
@@ -419,6 +464,11 @@ function applyPresets() {
 	var aspects = Object.keys(presets.resolutions || { '9:16': [] })
 	fillSelect('ugcAspect', aspects, '9:16')
 	fillSelect('podAspect', aspects, '16:9')
+	fillSelect('imgAspect', aspects, '9:16')
+	fillSelect('lvAspect', [
+		{ id: '16:9', label: '16:9 horizontal (YouTube biasa)' },
+		{ id: '9:16', label: '9:16 vertikal (Shorts / TikTok)' },
+	], '16:9')
 	syncResolutions('ugcAspect', 'ugcResolution', render.resolution)
 	syncResolutions('podAspect', 'podResolution', render.resolution)
 
@@ -438,7 +488,7 @@ function applyPresets() {
 	fillSelect('voiceNatural', presets.naturalPresets, (state.settings.tts || {}).naturalPreset)
 
 	fillSelect('lvMode', presets.streamModes, (state.settings.stream || {}).mode)
-	fillSelect('lvRes', ['2160', '1080', '720', '480'], String((state.settings.stream || {}).resolution || '1080'))
+	fillSelect('lvRes', resolutionOptions(['2160', '1440', '1080', '720', '480']), String((state.settings.stream || {}).resolution || '1080'))
 	fillSelect('lvFps', ['24', '25', '30', '60'], String((state.settings.stream || {}).fps || 30))
 	fillSelect('lvAudio', [
 		{ id: 'source', label: 'Audio asli video' },
@@ -450,16 +500,17 @@ function applyPresets() {
 
 	fillSelect('atAction', presets.automationActions, 'ugc.render')
 	fillSelect('atTrigger', presets.automationTriggers, 'watch-folder')
-
-	fillSelect('ugcResolution', undefined, render.resolution)
+	if ($('atFolder') && !$('atFolder').value) $('atFolder').placeholder = state.boot && state.boot.inboxPath ? state.boot.inboxPath : 'storage/inbox'
 }
 
 function syncResolutions(aspectId, resolutionId, current) {
 	var aspectNode = $(aspectId)
 	var resolutions = (state.presets || {}).resolutions || {}
 	if (!aspectNode) return
-	var list = resolutions[aspectNode.value] || ['720', '1080', '1440', '2160']
-	fillSelect(resolutionId, list, current || '1080')
+	var list = resolutions[aspectNode.value] || ['480', '720', '1080', '1440', '2160']
+	var node = $(resolutionId)
+	var keep = node && node.value ? node.value : current
+	fillSelect(resolutionId, resolutionOptions(list), keep || '1080')
 }
 
 /* ------------------------------- dashboard ------------------------------ */
@@ -771,6 +822,7 @@ function ugcBrief() {
 		voice: $('ugcVoice').value,
 		sceneCount: Number($('ugcScenesCount').value) || 5,
 		sceneDuration: Number($('ugcSceneDuration').value) || 5,
+		motion: $('ugcMotion') && $('ugcMotion').value !== 'auto' ? $('ugcMotion').value : null,
 	}
 }
 
@@ -815,7 +867,7 @@ function renderUgcScript() {
 				'"><div class="scene-head"><strong>Scene ' +
 				(index + 1) +
 				'</strong><div class="row gap"><button type="button" class="btn tiny primary" data-open-flow="' + index + '" title="Buka Google Flow & Isi Prompt">🚀 Buka di Flow</button><button type="button" class="btn tiny ghost" data-copy-prompt="' + index + '" title="Salin Prompt">📋 Salin</button><input class="mini" type="number" min="2" max="20" step="0.5" value="' +
-				(scene.duration || 5) +
+				(Number(scene.duration) || 5) +
 				'" data-field="duration" title="Durasi detik" /><button class="btn tiny danger" data-remove-scene="' +
 				index +
 				'">x</button></div></div>' +
@@ -854,8 +906,12 @@ function renderUgcScript() {
 					still: 'posisi kamera stabil dengan fokus sangat tajam ke produk',
 					cinematic: 'gerakan kamera sinematik yang sangat halus',
 				}
-				var motionDesc = motionMap[sc.motion] || sc.motion || 'gerakan kamera sinematik halus'
-				return 'Video vertikal 9:16 gaya video ulasan pengguna asli, ' + (sc.visual || 'rekaman produk dari dekat dipegang tangan wanita') + ', produk: ' + prod + ', rekaman kamera ponsel natural dan stabil, ' + motionDesc + ', pencahayaan alami siang hari dari jendela, detail kemasan dan tekstur produk tajam jernih, warna natural, tanpa teks tulisan di layar, tanpa watermark, kualitas video sinematik realistis'
+				var chosen = $('ugcMotion') ? $('ugcMotion').value : 'auto'
+				var motionKey = chosen && chosen !== 'auto' ? chosen : sc.motion
+				var motionDesc = motionMap[motionKey] || motionKey || 'gerakan kamera sinematik halus'
+				var aspectValue = $('ugcAspect') ? $('ugcAspect').value : '9:16'
+				var aspectText = { '9:16': 'Video vertikal 9:16', '16:9': 'Video horizontal 16:9', '1:1': 'Video persegi 1:1', '4:5': 'Video potret 4:5' }[aspectValue] || 'Video ' + aspectValue
+				return aspectText + ' gaya video ulasan pengguna asli, ' + (sc.visual || 'rekaman produk dari dekat dipegang tangan wanita') + ', produk: ' + prod + ', rekaman kamera ponsel natural dan stabil, ' + motionDesc + ', pencahayaan alami siang hari dari jendela, detail kemasan dan tekstur produk tajam jernih, warna natural, tanpa teks tulisan di layar, tanpa watermark, kualitas video sinematik realistis'
 			}
 
 			var openFlowBtn = sceneNode.querySelector('[data-open-flow]')
@@ -864,15 +920,22 @@ function renderUgcScript() {
 					e.preventDefault()
 					var sc = state.ugcScript.scenes[index]
 					var prompt = buildIndonesianPrompt(sc)
+					// buka tab dulu (sebelum await) supaya tidak diblokir popup blocker
+					var flowTab = window.open('about:blank', '_blank')
 					try {
 						await navigator.clipboard.writeText(prompt)
-					} catch (err) {}
+					} catch (err) {
+						toast('Prompt tidak bisa disalin otomatis, salin manual dari kartu scene', 'warn')
+					}
 					try {
 						var payload = ugcRenderPayload()
 						await api('/api/ugc/flow-session', { method: 'POST', body: payload })
-					} catch (err) {}
+					} catch (err) {
+						toast('Sesi Flow gagal disimpan: ' + err.message, 'warn')
+					}
 					startFlowWatcher()
-					window.open('https://flow.google.com/', '_blank')
+					if (flowTab) flowTab.location.href = 'https://flow.google.com/'
+					else window.open('https://flow.google.com/', '_blank')
 					toast('Prompt Scene ' + (index + 1) + ' disalin! Tab Google Flow dibuka. Tekan Ctrl+V lalu klik Generate.', 'success', 7000)
 					var statusNode = $('flowIngestStatus')
 					if (statusNode) {
@@ -887,8 +950,14 @@ function renderUgcScript() {
 					e.preventDefault()
 					var sc = state.ugcScript.scenes[index]
 					var prompt = buildIndonesianPrompt(sc)
-					navigator.clipboard.writeText(prompt)
-					toast('Prompt Scene ' + (index + 1) + ' berhasil disalin!', 'success')
+					navigator.clipboard.writeText(prompt).then(
+						function () {
+							toast('Prompt Scene ' + (index + 1) + ' berhasil disalin!', 'success')
+						},
+						function () {
+							toast('Gagal menyalin prompt (izin clipboard ditolak browser)', 'error')
+						},
+					)
 				})
 			}
 			var remove = sceneNode.querySelector('[data-remove-scene]')
@@ -1069,18 +1138,23 @@ function initUgc() {
 			btn.disabled = true
 			btn.textContent = 'Mengupload video...'
 			try {
-				var uploaded = await uploadFiles([files[0]])
+				var list = Array.prototype.slice.call(files, 0, 20).sort(function (a, b) {
+					return a.name.localeCompare(b.name, undefined, { numeric: true })
+				})
+				var uploaded = await uploadFiles(list)
 				if (!uploaded.length) throw new Error('Gagal mengupload video')
-				var asset = uploaded[0]
-				toast('Video berhasil diupload! Memulai render suara AI...', 'info')
+				toast(uploaded.length + ' video berhasil diupload! Memulai render suara AI...', 'info')
 				var statusNode = $('flowIngestStatus')
 				if (statusNode) {
 					statusNode.style.display = 'block'
-					statusNode.innerHTML = '<strong>🎙️ Sedang Me-render Video UGC...</strong><p class="muted small">Video Anda sedang digabungkan dengan suara AI Nadia (bersih tanpa teks overlay)...</p>'
+					statusNode.innerHTML = '<strong>🎙️ Sedang Me-render Video UGC...</strong><p class="muted small">Video Anda sedang digabungkan dengan suara AI (bersih tanpa teks overlay)...</p>'
 				}
 				var payload = ugcRenderPayload()
-				payload.assetIds = [asset.id]
+				payload.assetIds = uploaded.map(function (item) {
+					return item.id
+				})
 				payload.mode = 'local'
+				payload.variants = 1
 				var data = await api('/api/ugc/render', { method: 'POST', body: payload })
 				var jobs = data.jobs || []
 				jobs.forEach(upsertJob)
@@ -1104,7 +1178,7 @@ function initUgc() {
 				'2. Di Google Flow, klik kotak teks prompt lalu tekan Ctrl + V untuk menempel prompt.\n' +
 				'   Klik tombol "Generate" untuk membuat video.\n\n' +
 				'3. Saat video Flow selesai, klik tombol Download pada video tersebut.\n\n' +
-				'4. UGC Studio otomatis mendeteksi video dari folder Downloads Anda, menggabungkannya dengan suara AI (Nadia/Raka), lalu langsung menyimpannya di Library!'
+				'4. UGC Studio otomatis mendeteksi video dari folder Downloads Anda, menggabungkannya dengan suara AI, lalu langsung menyimpannya di Library!'
 			)
 		})
 	}
@@ -1135,24 +1209,40 @@ function renderRecentDownloads(files) {
 	if (!node) return
 	if (!files || !files.length) {
 		node.style.display = 'none'
+		node.removeAttribute('data-signature')
 		return
 	}
+	var list = files.slice(0, 8)
+	// Jangan gambar ulang kalau daftarnya sama (supaya centang & tombol "Memproses..." tidak ter-reset tiap scan).
+	var signature = list
+		.map(function (f) {
+			return f.file + ':' + f.size
+		})
+		.join('|')
+	if (node.getAttribute('data-signature') === signature && node.style.display === 'block') return
+	node.setAttribute('data-signature', signature)
 	node.style.display = 'block'
 	node.innerHTML =
 		'<strong style="font-size:12px;color:#A0A5B5;">Video terdeteksi di Downloads:</strong>' +
 		'<div class="stack" style="margin-top:6px;gap:6px;">' +
-		files
-			.slice(0, 3)
+		list
 			.map(function (f) {
+				var recent = (f.ageSeconds || 0) <= 15 * 60
+				var when = f.mtimeMs ? new Date(f.mtimeMs).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : ''
 				return (
-					'<div style="display:flex;align-items:center;justify-content:space-between;background:#121316;padding:8px 12px;border-radius:6px;font-size:12px;">' +
-					'<span>📁 <strong>' +
+					'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:#121316;padding:8px 12px;border-radius:6px;font-size:12px;">' +
+					'<label style="display:flex;align-items:center;gap:8px;min-width:0;"><input type="checkbox" data-merge-file="' +
+					esc(f.file) +
+					'" data-mtime="' +
+					esc(String(f.mtimeMs || 0)) +
+					'"' +
+					(recent ? ' checked' : '') +
+					' /><span>📁 <strong>' +
 					esc(f.name) +
 					'</strong> <span class="muted">(' +
 					fmtBytes(f.size) +
-					' - ' +
-					f.ageSeconds +
-					's lalu)</span></span>' +
+					(when ? ' - ' + esc(when) : '') +
+					')</span></span></label>' +
 					'<button type="button" class="btn tiny primary" data-import-file="' +
 					esc(f.file) +
 					'">⚡ Gabung ke UGC Ini</button>' +
@@ -1160,27 +1250,51 @@ function renderRecentDownloads(files) {
 				)
 			})
 			.join('') +
-		'</div>'
+		'</div>' +
+		(list.length > 1
+			? '<div class="row gap wrap" style="margin-top:8px;"><button type="button" class="btn small primary" data-import-merge="1">🎬 Gabung klip yang dicentang jadi 1 video</button><span class="muted small">Urutan scene = urutan download.</span></div>'
+			: '')
+
+	async function runImport(btn, body, idleText) {
+		btn.disabled = true
+		btn.textContent = 'Memproses...'
+		try {
+			var res = await api('/api/ugc/downloads/import', { method: 'POST', body: body })
+			toast(res.message || 'Video berhasil di-import!', 'success')
+			if (res.job) {
+				upsertJob(res.job)
+				go('jobs')
+			}
+		} catch (err) {
+			toast(err.message, 'error')
+			btn.disabled = false
+			btn.textContent = idleText
+		}
+	}
 
 	node.querySelectorAll('[data-import-file]').forEach(function (btn) {
-		btn.addEventListener('click', async function () {
-			var file = btn.getAttribute('data-import-file')
-			btn.disabled = true
-			btn.textContent = 'Memproses...'
-			try {
-				var res = await api('/api/ugc/downloads/import', { method: 'POST', body: { file: file, autoRender: true } })
-				toast(res.message || 'Video berhasil di-import!', 'success')
-				if (res.job) {
-					upsertJob(res.job)
-					go('jobs')
-				}
-			} catch (err) {
-				toast(err.message, 'error')
-				btn.disabled = false
-				btn.textContent = '⚡ Gabung ke UGC Ini'
-			}
+		btn.addEventListener('click', function () {
+			runImport(btn, { file: btn.getAttribute('data-import-file'), autoRender: true }, '⚡ Gabung ke UGC Ini')
 		})
 	})
+	var mergeBtn = node.querySelector('[data-import-merge]')
+	if (mergeBtn) {
+		mergeBtn.addEventListener('click', function () {
+			var picked = Array.prototype.slice
+				.call(node.querySelectorAll('[data-merge-file]'))
+				.filter(function (box) {
+					return box.checked
+				})
+				.sort(function (a, b) {
+					return Number(a.getAttribute('data-mtime')) - Number(b.getAttribute('data-mtime'))
+				})
+				.map(function (box) {
+					return box.getAttribute('data-merge-file')
+				})
+			if (!picked.length) return toast('Centang minimal 1 klip dulu', 'warn')
+			runImport(mergeBtn, { files: picked, autoRender: true }, '🎬 Gabung klip yang dicentang jadi 1 video')
+		})
+	}
 }
 
 async function loadProducts() {
@@ -1288,7 +1402,7 @@ function initPodcast() {
 					aspect: $('podAspect').value,
 					resolution: $('podResolution').value,
 					musicMood: $('podMusic').value,
-					gap: Number($('podGap').value) || 0.35,
+					gap: $('podGap').value === '' ? 0.35 : Math.max(0, Number($('podGap').value) || 0),
 					coverAssetId: $('podCover').value || null,
 					subtitle: $('podSubtitle') && $('podSubtitle').type === 'checkbox' ? $('podSubtitle').checked : $('podSubtitle').value !== 'none',
 					subtitleStyle: $('podSubtitle') && $('podSubtitle').type === 'checkbox' ? ($('podSubtitle').checked ? 'minimal' : 'none') : $('podSubtitle').value,
@@ -1337,6 +1451,7 @@ async function loadVoiceList() {
 		.join('')
 	node.querySelectorAll('[data-del-audio]').forEach(function (button) {
 		button.addEventListener('click', async function () {
+			if (!confirm('Hapus audio ini?')) return
 			try {
 				await api('/api/library/audio/' + button.getAttribute('data-del-audio'), { method: 'DELETE' })
 				loadVoiceList()
@@ -1461,7 +1576,7 @@ function renderStreams() {
 				'<article class="card stream"><div class="row between"><div><strong>' +
 				esc(stream.name) +
 				'</strong><div class="muted small">' +
-				esc(stream.rtmpUrl + ' - key ' + (stream.streamKey || 'belum diisi')) +
+				esc(stream.rtmpUrl + ' - key ' + (stream.streamKey || (stream.usesDefaultKey ? 'default (Settings / .env)' : /^(rtmps?|srt):\/\/[^/]+\/[^/]+\/.+/.test(stream.rtmpUrl || '') ? 'ada di URL' : 'belum diisi'))) +
 				'</div></div>' +
 				badge(status.status || 'stopped') +
 				'</div><div class="kv"><span>Mode</span><b>' +
@@ -1551,7 +1666,9 @@ function renderStreams() {
 			'Total durasi playlist: ' + info.totalDurationText,
 			'Loop per hari: ' + info.loopCountPerDay + 'x',
 			'Estimasi bandwidth: ' + info.estimatedGbPerDay + ' GB/hari',
-			'Mode siap pakai: ' + info.readyMode,
+			'Mode siap pakai: ' + info.readyMode + (info.modeReason ? ' (' + info.modeReason + ')' : ''),
+			'Target output: ' + (info.target || '-') + ' | audio: ' + (info.audioMode || 'source'),
+			'Stream key: ' + (info.keySource || '-'),
 			info.missing ? 'File hilang: ' + info.missing : 'Semua file lengkap',
 			'',
 		].concat(
@@ -1592,6 +1709,7 @@ function initLive() {
 			items: items,
 			mode: $('lvMode').value,
 			resolution: $('lvRes').value,
+			aspect: $('lvAspect') ? $('lvAspect').value : '16:9',
 			fps: Number($('lvFps').value) || 30,
 			videoBitrate: $('lvBitrate').value.trim() || '4500k',
 			audioMode: $('lvAudio').value,
@@ -1599,7 +1717,9 @@ function initLive() {
 			loop: $('lvLoop').checked,
 			autoStart: $('lvAuto').checked,
 		}
-		if (!body.streamKey) return toast('Stream key YouTube wajib diisi', 'warn')
+		var hasDefaultKey = Boolean((state.settings.stream || {}).streamKey)
+		var fullUrl = /^(rtmps?|srt):\/\/[^/]+\/[^/]+\/.+/.test(body.rtmpUrl)
+		if (!body.streamKey && !hasDefaultKey && !fullUrl) return toast('Stream key YouTube wajib diisi (atau isi di Settings / YT_STREAM_KEY di .env)', 'warn')
 		try {
 			await api('/api/streams', { method: 'POST', body: body })
 			toast('Channel live dibuat', 'success')
@@ -1660,7 +1780,10 @@ function renderAutomations() {
 				esc(item.nextRunAt ? new Date(item.nextRunAt).toLocaleString('id-ID') : '-') +
 				'</b></div>' +
 				(item.trigger === 'webhook' ? '<div class="code-line">POST ' + esc(location.origin + item.webhookUrl) + '</div>' : '') +
-				(item.trigger === 'watch-folder' ? '<div class="code-line">' + esc(item.watchFolder || '') + '</div>' : '') +
+				(item.trigger === 'watch-folder'
+					? '<div class="code-line">' + esc(item.watchFolder || '') + '</div><div class="muted small">Jenis file: ' + esc((item.watchKinds || []).join(', ') || 'tidak ada (aksi ini tidak memakai file)') + '</div>'
+					: '') +
+				(item.lastResult ? '<div class="muted small">Hasil terakhir: ' + esc(item.lastResult) + '</div>' : '') +
 				'<div class="row gap wrap"><button class="btn tiny primary" data-at-run="' +
 				esc(item.id) +
 				'">Run sekarang</button><button class="btn tiny" data-at-toggle="' +
@@ -1677,8 +1800,9 @@ function renderAutomations() {
 	node.querySelectorAll('[data-at-run]').forEach(function (button) {
 		button.addEventListener('click', async function () {
 			try {
-				await api('/api/automations/' + button.getAttribute('data-at-run') + '/run', { method: 'POST', body: {} })
-				toast('Automation dijalankan', 'success')
+				var data = await api('/api/automations/' + button.getAttribute('data-at-run') + '/run', { method: 'POST', body: {} })
+				var info = (data && data.result && data.result.result) || {}
+				toast(info.message || (info.processed ? info.processed + ' file dari folder diproses' : 'Automation dijalankan'), 'success')
 				loadAutomations()
 			} catch (err) {
 				toast(err.message, 'error')
@@ -1718,6 +1842,7 @@ function syncAutomationFields() {
 	hide($('atScheduleFields'), trigger !== 'schedule')
 	hide($('atIntervalField'), trigger !== 'interval')
 	hide($('atStreamField'), action.indexOf('stream.') !== 0)
+	hide($('atFolderField'), trigger !== 'watch-folder')
 }
 
 function initAutomation() {
@@ -1744,17 +1869,11 @@ function initAutomation() {
 			streamId: $('atStream').value || null,
 			schedule: {
 				time: $('atTime').value || '08:00',
-				days: String($('atDays').value || '0,1,2,3,4,5,6')
-					.split(',')
-					.map(function (day) {
-						return Number(day.trim())
-					})
-					.filter(function (day) {
-						return !isNaN(day)
-					}),
+				days: String($('atDays').value || '0,1,2,3,4,5,6'),
 			},
 			intervalMinutes: Number($('atMinutes').value) || 120,
 		}
+		if ($('atFolder') && $('atFolder').value.trim()) body.watchFolder = $('atFolder').value.trim()
 		try {
 			await api('/api/automations', { method: 'POST', body: body })
 			toast('Automation dibuat', 'success')
@@ -1817,20 +1936,32 @@ function renderJobs() {
 	})
 	node.querySelectorAll('[data-job-cancel]').forEach(function (button) {
 		button.addEventListener('click', async function () {
-			await api('/api/jobs/' + button.getAttribute('data-job-cancel') + '/cancel', { method: 'POST', body: {} })
-			loadJobs()
+			try {
+				await api('/api/jobs/' + button.getAttribute('data-job-cancel') + '/cancel', { method: 'POST', body: {} })
+				loadJobs()
+			} catch (err) {
+				toast(err.message, 'error')
+			}
 		})
 	})
 	node.querySelectorAll('[data-job-retry]').forEach(function (button) {
 		button.addEventListener('click', async function () {
-			await api('/api/jobs/' + button.getAttribute('data-job-retry') + '/retry', { method: 'POST', body: {} })
-			loadJobs()
+			try {
+				await api('/api/jobs/' + button.getAttribute('data-job-retry') + '/retry', { method: 'POST', body: {} })
+				loadJobs()
+			} catch (err) {
+				toast(err.message, 'error')
+			}
 		})
 	})
 	node.querySelectorAll('[data-job-del]').forEach(function (button) {
 		button.addEventListener('click', async function () {
-			await api('/api/jobs/' + button.getAttribute('data-job-del'), { method: 'DELETE' })
-			loadJobs()
+			try {
+				await api('/api/jobs/' + button.getAttribute('data-job-del'), { method: 'DELETE' })
+				loadJobs()
+			} catch (err) {
+				toast(err.message, 'error')
+			}
 		})
 	})
 }
@@ -2022,7 +2153,7 @@ function initBrand() {
 /* ------------------------------- settings ------------------------------- */
 
 var SETTING_FIELDS = [
-	['stFlowProvider', 'flow', 'provider', ['flow', 'simulate']],
+	['stFlowProvider', 'flow', 'provider', [{ id: 'simulate', label: 'simulate (tanpa API)' }, { id: 'flow', label: 'flow (pakai API)' }]],
 	['stFlowBase', 'flow', 'baseUrl'],
 	['stFlowKey', 'flow', 'apiKey'],
 	['stFlowVideoModel', 'flow', 'videoModel'],
@@ -2034,21 +2165,29 @@ var SETTING_FIELDS = [
 	['stFlowImagePath', 'flow', 'imagePath'],
 	['stFlowStatusPath', 'flow', 'statusPath'],
 	['stFlowFallback', 'flow', 'autoFallbackToLow'],
-	['stTtsProvider', 'tts', 'provider', ['fishaudio', 'simulate', 'elevenlabs', 'openai', 'custom']],
+	['stTtsProvider', 'tts', 'provider', [
+		{ id: 'fishaudio', label: 'Fish Audio (murah & bagus bahasa Indonesia)' },
+		{ id: 'simulate', label: 'Otomatis (Fish Audio kalau key ada di .env, kalau tidak Google gratis)' },
+		{ id: 'google', label: 'Google TTS gratis (selalu)' },
+		{ id: 'elevenlabs', label: 'ElevenLabs' },
+		{ id: 'openai', label: 'OpenAI TTS' },
+		{ id: 'custom', label: 'Custom endpoint' },
+	]],
 	['stTtsBase', 'tts', 'baseUrl'],
 	['stTtsKey', 'tts', 'apiKey'],
 	['stTtsModel', 'tts', 'model'],
 	['stTtsVoice', 'tts', 'defaultVoice'],
+	['stTtsVoiceB', 'tts', 'voiceMap.host-b'],
 	['stTtsCache', 'tts', 'cache'],
 	['stTtsNatural', 'tts', 'naturalPreset'],
 	['stTtsNaturalize', 'tts', 'naturalize'],
-	['stLlmProvider', 'llm', 'provider', ['local', 'remote']],
+	['stLlmProvider', 'llm', 'provider', [{ id: 'local', label: 'local (template bawaan, gratis)' }, { id: 'remote', label: 'remote (OpenAI compatible)' }]],
 	['stLlmBase', 'llm', 'baseUrl'],
 	['stLlmKey', 'llm', 'apiKey'],
 	['stLlmModel', 'llm', 'model'],
-	['stRenderRes', 'render', 'resolution', ['720', '1080', '1440', '2160']],
+	['stRenderRes', 'render', 'resolution', resolutionOptions(['480', '720', '1080', '1440', '2160'])],
 	['stRenderFps', 'render', 'fps', ['24', '25', '30', '60']],
-	['stRenderPreset', 'render', 'preset', ['ultrafast', 'veryfast', 'faster', 'fast', 'medium']],
+	['stRenderPreset', 'render', 'preset', ['ultrafast', 'veryfast', 'faster', 'fast', 'medium', 'slow']],
 	['stRenderCrf', 'render', 'crf'],
 	['stRenderMusicVol', 'render', 'musicVolume'],
 	['stQueueConc', 'queue', 'concurrency'],
@@ -2067,11 +2206,29 @@ async function loadSettings() {
 	SETTING_FIELDS.forEach(function (field) {
 		var node = $(field[0])
 		if (!node) return
-		if (field[3] && node.tagName === 'SELECT') fillSelect(field[0], field[3])
-		var value = (state.settings[field[1]] || {})[field[2]]
+		var value = getDeep(state.settings[field[1]] || {}, field[2])
+		if (field[3] && node.tagName === 'SELECT') fillSelect(field[0], field[3], value === undefined || value === null ? undefined : String(value), undefined, true)
 		if (node.type === 'checkbox') node.checked = Boolean(value)
 		else node.value = value === undefined || value === null ? '' : value
 	})
+}
+
+function getDeep(obj, dotted) {
+	return String(dotted)
+		.split('.')
+		.reduce(function (acc, key) {
+			return acc && typeof acc === 'object' ? acc[key] : undefined
+		}, obj)
+}
+
+function setDeep(obj, dotted, value) {
+	var keys = String(dotted).split('.')
+	var cursor = obj
+	for (var i = 0; i < keys.length - 1; i += 1) {
+		if (!cursor[keys[i]] || typeof cursor[keys[i]] !== 'object') cursor[keys[i]] = {}
+		cursor = cursor[keys[i]]
+	}
+	cursor[keys[keys.length - 1]] = value
 }
 
 function initSettings() {
@@ -2081,9 +2238,11 @@ function initSettings() {
 			var node = $(field[0])
 			if (!node) return
 			if (!body[field[1]]) body[field[1]] = {}
-			if (node.type === 'checkbox') body[field[1]][field[2]] = node.checked
-			else if (node.type === 'number') body[field[1]][field[2]] = Number(node.value)
-			else body[field[1]][field[2]] = node.value
+			if (node.type === 'checkbox') setDeep(body[field[1]], field[2], node.checked)
+			else if (node.type === 'number') {
+				// kosong = jangan ubah (Number('') = 0 bisa bikin CRF 0 / musik senyap)
+				if (node.value !== '' && !isNaN(Number(node.value))) setDeep(body[field[1]], field[2], Number(node.value))
+			} else setDeep(body[field[1]], field[2], node.value)
 		})
 		try {
 			await api('/api/settings', { method: 'PATCH', body: body })
@@ -2115,7 +2274,7 @@ function initSettings() {
 	$('stCleanup').addEventListener('click', async function () {
 		try {
 			var data = await api('/api/system/cleanup', { method: 'POST', body: {} })
-			$('stResult').textContent = data.message + ' (' + data.removed + ' item temporary dihapus)'
+			$('stResult').textContent = data.message || 'Bersih-bersih selesai'
 			toast('Bersih-bersih selesai', 'success')
 		} catch (err) {
 			toast(err.message, 'error')
@@ -2133,7 +2292,7 @@ async function loadLogs() {
 	node.textContent = logs.length
 		? logs
 				.map(function (entry) {
-					var payload = entry.data || {}
+					var payload = entry.data || entry.job || entry
 					return '[' + String(entry.at || '').slice(11, 19) + '] ' + String(entry.type || '').padEnd(16, ' ') + ' ' + (payload.message || payload.name || payload.title || JSON.stringify(payload).slice(0, 160))
 				})
 				.join('\n')
@@ -2172,7 +2331,7 @@ async function pollHealth() {
 	try {
 		var health = await api('/api/health')
 		setDot('dotFlow', 'modeFlow', health.flowMode === 'flow', health.flowMode === 'flow' ? 'Flow Ultra' : 'Flow simulasi')
-		setDot('dotTts', 'modeTts', health.ttsMode !== 'simulate', health.ttsMode !== 'simulate' ? 'Voice ' + health.ttsMode : 'Voice simulasi')
+		setTtsDot(health.ttsMode, health.ttsProvider, health.ttsReason)
 	} catch (err) {}
 }
 

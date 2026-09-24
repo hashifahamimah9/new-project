@@ -1,3 +1,8 @@
+/* atribut hidden harus selalu menang atas display dari .card/.grid/.field */
+[hidden] {
+	display: none !important;
+}
+
 :root {
 	--canvas: #191919;
 	--surface: #202020;
@@ -1059,14 +1064,23 @@ audio {
 	animation: slide-in 0.18s ease;
 }
 
-.toast.ok {
+.toast.ok,
+.toast.success {
 	border-left-color: var(--green);
 }
-.toast.err {
+.toast.err,
+.toast.error {
 	border-left-color: var(--red);
 }
 .toast.warn {
 	border-left-color: var(--orange);
+}
+.toast.out {
+	opacity: 0;
+	transform: translateY(6px);
+	transition:
+		opacity 0.35s ease,
+		transform 0.35s ease;
 }
 
 @keyframes slide-in {

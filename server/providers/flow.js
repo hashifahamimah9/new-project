@@ -12,10 +12,98 @@ const store = require('../lib/store')
 const ff = require('../lib/ffmpeg')
 const { request, download, saveBase64 } = require('../lib/httpclient')
 const { PATHS, dimensionsFor } = require('../lib/config')
-const { uid, ensureDir, sleep, dayKey } = require('../lib/util')
+const { uid, ensureDir, dayKey } = require('../lib/util')
+const jobctx = require('../lib/jobctx')
 
 function config() {
 	return store.settings().flow || {}
+}
+
+function todayKey() {
+	return dayKey(new Date(), (store.settings().workspace || {}).timezone)
+}
+
+function canceled(o) {
+	return jobctx.isCanceled() || Boolean(o && o.isCanceled && o.isCanceled())
+}
+
+function checkCanceled(o) {
+	if (canceled(o)) throw jobctx.canceledError()
+}
+
+/** Semaphore per lane supaya jumlah job paralel ke Flow sesuai setting lowConcurrency / standardConcurrency. */
+const LANES = { low: { active: 0, waiters: [] }, standard: { active: 0, waiters: [] } }
+
+function laneLimit(lane) {
+	const c = config()
+	const n = Number(lane === 'standard' ? c.standardConcurrency : c.lowConcurrency)
+	return Number.isFinite(n) && n > 0 ? Math.floor(n) : 1
+}
+
+function acquireLane(lane) {
+	const slot = LANES[lane] || LANES.low
+	return new Promise(function (resolve, reject) {
+		const grant = function () {
+			slot.active += 1
+			let released = false
+			resolve(function release() {
+				if (released) return
+				released = true
+				slot.active -= 1
+				const next = slot.waiters.shift()
+				if (next) next()
+			})
+		}
+		if (slot.active < laneLimit(lane)) return grant()
+		let off = function () {}
+		const waiter = function () {
+			off()
+			grant()
+		}
+		slot.waiters.push(waiter)
+		off = jobctx.onCancel(function () {
+			const i = slot.waiters.indexOf(waiter)
+			if (i !== -1) slot.waiters.splice(i, 1)
+			reject(jobctx.canceledError())
+		})
+	})
+}
+
+/** Tentukan lane akhir + terapkan batas harian lane standard. */
+function resolveLane(requested, o) {
+	const c = config()
+	let lane = requested === 'standard' ? 'standard' : 'low'
+	if (lane === 'standard' && !isSimulate()) {
+		const limit = Number(c.standardDailyLimit) || 0
+		const used = Number(store.usageFor(todayKey()).standard) || 0
+		if (limit > 0 && used >= limit) {
+			if (c.autoFallbackToLow !== false) {
+				if (o && o.log) o.log('Batas harian lane standard (' + limit + ' video) tercapai, otomatis pakai lower priority')
+				lane = 'low'
+			} else {
+				throw new Error('Batas harian lane standard (' + limit + ' video) sudah tercapai. Pakai lane "low" atau naikkan batas di Settings > Flow.')
+			}
+		}
+	}
+	return lane
+}
+
+/** API key Flow hanya dikirim ke host yang sama dengan Base URL (jangan bocor ke CDN / signed URL). */
+function authFor(url) {
+	try {
+		const base = new URL(config().baseUrl)
+		const target = new URL(url, base)
+		if (target.host === base.host) return { Authorization: 'Bearer ' + config().apiKey }
+	} catch (err) {}
+	return {}
+}
+
+function absoluteUrl(url) {
+	try {
+		return new URL(url, config().baseUrl).href
+	} catch (err) {
+		return url
+	}
 }
 
 function isSimulate() {
@@ -37,7 +125,7 @@ function endpoint(suffix) {
 
 function extractUrl(data) {
 	if (!data) return null
-	if (typeof data === 'string') return data
+	if (typeof data === 'string') return /^(https?:|data:|\/)/i.test(data) ? data : null
 	return (
 		data.url || data.video_url || data.videoUrl || data.image_url || data.output_url ||
 		(data.output && (data.output.url || data.output.video_url)) ||
@@ -49,6 +137,7 @@ function extractUrl(data) {
 
 function extractBase64(data) {
 	if (!data) return null
+	if (typeof data === 'string') return /^(https?:|data:|\/)/i.test(data) ? null : data
 	return data.b64_json || data.base64 || data.image_base64 || data.video_base64 ||
 		(Array.isArray(data.data) && data.data[0] && (data.data[0].b64_json || data.data[0].base64)) || null
 }
@@ -73,8 +162,9 @@ async function pollJob(jobId, options) {
 	const deadline = Date.now() + (Number(c.maxWaitMs) || 900000)
 	let delay = Number(c.pollIntervalMs) || 5000
 	while (Date.now() < deadline) {
-		if (o.isCanceled && o.isCanceled()) throw Object.assign(new Error('Dibatalkan oleh user'), { canceled: true })
-		await sleep(delay)
+		checkCanceled(o)
+		await jobctx.sleep(delay)
+		checkCanceled(o)
 		const res = await request(endpoint(statusPath), { method: 'GET', headers: headers(o.lane), retries: 2 })
 		const state = statusOf(res.data)
 		if (o.log) o.log('Flow job ' + jobId + ': ' + state)
@@ -88,7 +178,8 @@ async function pollJob(jobId, options) {
 async function saveOutput(data, destination) {
 	const url = extractUrl(data)
 	if (url) {
-		await download(url, destination, { headers: { Authorization: 'Bearer ' + config().apiKey } })
+		const full = absoluteUrl(url)
+		await download(full, destination, { headers: authFor(full) })
 		return destination
 	}
 	const b64 = extractBase64(data)
@@ -107,7 +198,7 @@ const SIM_GRADES = [
 	'eq=contrast=1.02:saturation=0.95:brightness=0.04,colorbalance=rm=0.05:bm=-0.03',
 	'eq=contrast=1.1:saturation=1.2,vignette=PI/5',
 	'eq=contrast=0.98:saturation=1.05:gamma=1.05,colorbalance=rs=-0.05:bs=0.06',
-	'eq=contrast=1.08:saturation=1:unsharp=5:5:0.8',
+	'eq=contrast=1.08:saturation=1,unsharp=5:5:0.8',
 ]
 
 /** Generate banyak gambar dari 1 foto produk / prompt. */
@@ -117,10 +208,10 @@ async function generateImages(options) {
 	const dims = dimensionsFor(o.aspect || '9:16', o.resolution || '1080')
 	const outDir = ensureDir(path.join(PATHS.renders, 'images'))
 	const files = []
-	store.addUsage(dayKey(new Date(), store.settings().workspace.timezone), { images: count })
 
 	if (isSimulate()) {
 		for (let i = 0; i < count; i += 1) {
+			checkCanceled(o)
 			const out = path.join(outDir, 'img_' + uid('', 8) + '.jpg')
 			if (o.refImage && fs.existsSync(o.refImage)) {
 				const grade = SIM_GRADES[i % SIM_GRADES.length]
@@ -135,6 +226,7 @@ async function generateImages(options) {
 			files.push({ file: out, prompt: o.prompt, simulated: true })
 			if (o.log) o.log('Gambar ' + (i + 1) + '/' + count + ' selesai (simulate)')
 		}
+		store.addUsage(todayKey(), { images: files.length })
 		return files
 	}
 
@@ -151,16 +243,24 @@ async function generateImages(options) {
 	}
 	if (o.refImage && fs.existsSync(o.refImage)) body.image = imageDataUri(o.refImage)
 	if (o.negativePrompt) body.negative_prompt = o.negativePrompt
-	const res = await request(endpoint(c.imagePath || '/v1/images'), { method: 'POST', headers: headers(o.lane), body: body, timeoutMs: 180000, retries: 1 })
-	let data = res.data
-	const jid = jobIdOf(data)
-	if (jid && statusOf(data) !== 'done') data = await pollJob(jid, o)
-	const list = Array.isArray(data.data) ? data.data : Array.isArray(data.images) ? data.images : [data]
-	for (const item of list) {
-		const out = path.join(outDir, 'img_' + uid('', 8) + '.jpg')
-		await saveOutput(item, out)
-		files.push({ file: out, prompt: o.prompt, simulated: false })
+	const release = await acquireLane(o.lane === 'standard' ? 'standard' : 'low')
+	try {
+		const res = await request(endpoint(c.imagePath || '/v1/images'), { method: 'POST', headers: headers(o.lane), body: body, timeoutMs: 180000, retries: 1 })
+		let data = res.data
+		const jid = jobIdOf(data)
+		if (jid && statusOf(data) !== 'done') data = await pollJob(jid, o)
+		const list = Array.isArray(data.data) ? data.data : Array.isArray(data.images) ? data.images : Array.isArray(data.outputs) ? data.outputs : [data]
+		for (const item of list.slice(0, count)) {
+			checkCanceled(o)
+			const out = path.join(outDir, 'img_' + uid('', 8) + '.jpg')
+			await saveOutput(item, out)
+			files.push({ file: out, prompt: o.prompt, simulated: false })
+		}
+	} finally {
+		release()
 	}
+	if (!files.length) throw new Error('Flow tidak mengembalikan gambar')
+	store.addUsage(todayKey(), { images: files.length })
 	return files
 }
 
@@ -171,8 +271,11 @@ async function generateVideo(options) {
 	const outDir = ensureDir(path.join(PATHS.renders, 'scenes'))
 	const out = o.out || path.join(outDir, 'scene_' + uid('', 8) + '.mp4')
 	const duration = Math.max(1.5, Number(o.duration) || 5)
-	const lane = o.lane || config().defaultLane || 'low'
-	store.addUsage(dayKey(new Date(), store.settings().workspace.timezone), { videos: 1, low: lane === 'low' ? 1 : 0, standard: lane === 'standard' ? 1 : 0 })
+	const lane = resolveLane(o.lane || config().defaultLane || 'low', o)
+	const countUsage = function (usedLane) {
+		store.addUsage(todayKey(), { videos: 1, low: usedLane === 'low' ? 1 : 0, standard: usedLane === 'standard' ? 1 : 0 })
+	}
+	checkCanceled(o)
 
 	if (isSimulate()) {
 		if (o.refImage && fs.existsSync(o.refImage)) {
@@ -183,6 +286,7 @@ async function generateVideo(options) {
 		} else {
 			await ff.textCardClip({ out: out, duration: duration, width: dims.width, height: dims.height, fps: o.fps || 30, title: String(o.title || 'Scene').slice(0, 30), subtitle: String(o.prompt || '').slice(0, 70) })
 		}
+		countUsage(lane)
 		return { file: out, simulated: true, duration: await ff.durationOf(out), lane: lane }
 	}
 
@@ -201,8 +305,10 @@ async function generateVideo(options) {
 		negative_prompt: o.negativePrompt || undefined,
 	}
 	if (o.refImage && fs.existsSync(o.refImage)) body.image = imageDataUri(o.refImage)
-	if (o.log) o.log('Kirim job ke Flow (' + priorityFor(lane) + ' priority, ' + duration + 's)')
+	let release = null
 	try {
+		release = await acquireLane(lane)
+		if (o.log) o.log('Kirim job ke Flow (' + priorityFor(lane) + ' priority, ' + duration + 's)')
 		const res = await request(endpoint(c.videoPath || '/v1/videos'), { method: 'POST', headers: headers(lane), body: body, timeoutMs: 240000, retries: 1 })
 		let data = res.data
 		const jid = jobIdOf(data)
@@ -210,9 +316,14 @@ async function generateVideo(options) {
 			if (o.log) o.log('Flow job dibuat: ' + jid + ', menunggu render')
 			data = await pollJob(jid, Object.assign({}, o, { lane: lane }))
 		}
-		await saveOutput(Array.isArray(data.data) ? data.data[0] : data, out)
+		await saveOutput(Array.isArray(data.data) ? data.data[0] : Array.isArray(data.outputs) ? data.outputs[0] : data, out)
+		release()
+		release = null
+		countUsage(lane)
 		return { file: out, simulated: false, duration: await ff.durationOf(out), lane: lane, jobId: jid }
 	} catch (err) {
+		if (release) release()
+		if (err.canceled || canceled(o)) throw err.canceled ? err : jobctx.canceledError()
 		if (lane === 'standard' && c.autoFallbackToLow) {
 			if (o.log) o.log('Lane standard gagal (' + err.message + '), fallback ke lower priority')
 			return generateVideo(Object.assign({}, o, { lane: 'low' }))
@@ -230,6 +341,8 @@ async function testConnection() {
 		const list = res.data && (res.data.data || res.data.models)
 		return { ok: true, mode: 'flow', message: 'Koneksi Flow OK', models: Array.isArray(list) ? list.length : undefined }
 	} catch (err) {
+		if (err.status === 401 || err.status === 403) return { ok: false, mode: 'flow', message: 'API key Flow ditolak (HTTP ' + err.status + '). Cek lagi API key di Settings.' }
+		if (err.status === 404 || err.status === 405) return { ok: true, mode: 'flow', message: 'Server Flow terjangkau (endpoint /v1/models tidak tersedia, jadi model tidak bisa dicek). Coba render 1 video untuk memastikan.' }
 		return { ok: false, mode: 'flow', message: err.message }
 	}
 }

@@ -1,6 +1,6 @@
 {
   "name": "ugc-flow-studio",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "UGC Flow Studio - auto UGC video generator dari foto produk, AI podcast, voice studio natural, dan 24/7 YouTube live streaming. Zero npm dependency.",
   "main": "server/index.js",

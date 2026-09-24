@@ -3,12 +3,16 @@
 /** Job queue: antrian render, concurrency, retry, cancel, progress realtime. */
 
 const store = require('./store')
+const jobctx = require('./jobctx')
 const { emit, logger } = require('./events')
 const { nowIso, uid } = require('./util')
 
 const handlers = new Map()
-const running = new Map() // jobId -> { canceled: boolean }
-const MAX_LOG = 400
+const running = new Map() // jobId -> { canceled: boolean, ctx: jobctx }
+const MAX_LOG = 300
+const MAX_LOG_FINISHED = 150
+const MAX_RECOVERIES = 2
+let stopping = false
 
 function register(type, handler) {
 	handlers.set(type, handler)
@@ -34,7 +38,7 @@ function jobLog(jobId, message) {
 	const job = store.get('jobs', jobId)
 	if (!job) return
 	job.logs = (job.logs || []).concat([{ at: nowIso(), message: String(message).slice(0, 500) }]).slice(-MAX_LOG)
-	store.save()
+	store.touch()
 	emit('job:log', { jobId: jobId, message: String(message).slice(0, 500), at: nowIso() })
 }
 
@@ -43,7 +47,7 @@ function jobProgress(jobId, percent, note) {
 	if (!job) return
 	job.progress = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)))
 	if (note) job.stage = String(note).slice(0, 120)
-	store.save()
+	store.touch()
 	emit('job:progress', { jobId: jobId, progress: job.progress, stage: job.stage || '' })
 }
 
@@ -90,6 +94,7 @@ function summary(job) {
 		result: job.result || null,
 		retries: job.retries || 0,
 		source: job.source || 'manual',
+		automationId: job.automationId || null,
 		logCount: (job.logs || []).length,
 	}
 }
@@ -112,7 +117,7 @@ async function runJob(job) {
 		emit('job:failed', { job: summary(store.get('jobs', job.id)) })
 		return
 	}
-	const state = { canceled: false }
+	const state = { canceled: false, ctx: jobctx.create(job.id) }
 	running.set(job.id, state)
 	store.update('jobs', job.id, { status: 'running', startedAt: nowIso(), stage: 'Mulai', progress: 1, error: null })
 	emit('job:started', { job: summary(store.get('jobs', job.id)) })
@@ -138,7 +143,9 @@ async function runJob(job) {
 		},
 	}
 	try {
-		const result = await handler(ctx)
+		const result = await jobctx.run(state.ctx, function () {
+			return handler(ctx)
+		})
 		if (state.canceled) {
 			store.update('jobs', job.id, { status: 'canceled', finishedAt: nowIso(), stage: 'Dibatalkan' })
 			emit('job:canceled', { job: summary(store.get('jobs', job.id)) })
@@ -149,7 +156,10 @@ async function runJob(job) {
 			notify('job_done', job)
 		}
 	} catch (err) {
-		if (err && err.canceled) {
+		if (stopping && !state.canceled) {
+			// Server dimatikan: biarkan status "running" supaya recover() melanjutkan job saat server nyala lagi.
+			jobLog(job.id, 'Server dimatikan, job akan dilanjutkan otomatis saat server nyala lagi')
+		} else if (state.canceled || (err && err.canceled)) {
 			store.update('jobs', job.id, { status: 'canceled', finishedAt: nowIso(), stage: 'Dibatalkan' })
 			emit('job:canceled', { job: summary(store.get('jobs', job.id)) })
 		} else {
@@ -170,6 +180,11 @@ async function runJob(job) {
 		}
 	} finally {
 		running.delete(job.id)
+		const finished = store.get('jobs', job.id)
+		if (finished && finished.status !== 'queued' && (finished.logs || []).length > MAX_LOG_FINISHED) {
+			finished.logs = finished.logs.slice(-MAX_LOG_FINISHED)
+		}
+		store.save()
 		setTimeout(tick, 10)
 	}
 }
@@ -187,7 +202,7 @@ function notify(event, job, message) {
 }
 
 function tick() {
-	if (isPaused()) return
+	if (stopping || isPaused()) return
 	while (running.size < concurrency()) {
 		const job = nextJob()
 		if (!job) return
@@ -202,7 +217,10 @@ function cancel(jobId) {
 	const state = running.get(jobId)
 	if (state) {
 		state.canceled = true
-		jobLog(jobId, 'Permintaan cancel diterima, menyelesaikan proses saat ini...')
+		const killed = jobctx.cancel(state.ctx)
+		jobLog(jobId, 'Permintaan cancel diterima' + (killed ? ', menghentikan ' + killed + ' proses ffmpeg' : '') + '...')
+		store.update('jobs', jobId, { stage: 'Membatalkan...' })
+		emit('job:progress', { jobId: jobId, progress: job.progress || 0, stage: 'Membatalkan...' })
 		return true
 	}
 	if (job.status === 'queued') {
@@ -216,6 +234,7 @@ function cancel(jobId) {
 function retry(jobId) {
 	const job = store.get('jobs', jobId)
 	if (!job) return null
+	if (running.has(jobId) || job.status === 'queued') return job
 	store.update('jobs', jobId, { status: 'queued', error: null, progress: 0, stage: 'Menunggu antrian', retries: 0, finishedAt: null })
 	emit('job:updated', { job: summary(store.get('jobs', jobId)) })
 	setTimeout(tick, 10)
@@ -244,20 +263,55 @@ function detail(jobId) {
 	return Object.assign(summary(job), { logs: job.logs || [], payload: job.payload || {} })
 }
 
-/** Job yang menggantung (status running saat server mati) dibalikin ke queued. */
+/**
+ * Job yang menggantung (status running saat server mati) dimasukkan lagi ke antrian
+ * supaya otomatis dilanjutkan. Kalau sudah 2x terputus, job ditandai gagal.
+ */
 function recover() {
 	let count = 0
 	store.coll('jobs').forEach(function (job) {
-		if (job.status === 'running') {
+		if (job.status !== 'running') return
+		const recoveries = (job.recoveries || 0) + 1
+		if (recoveries > MAX_RECOVERIES) {
 			job.status = 'failed'
-			job.error = 'Server restart saat job berjalan'
+			job.error = 'Server berhenti saat job berjalan (' + (recoveries - 1) + 'x). Klik Retry untuk mencoba lagi.'
+			job.stage = 'Gagal'
 			job.finishedAt = nowIso()
-			count += 1
+		} else {
+			job.status = 'queued'
+			job.stage = 'Dilanjutkan setelah server restart'
+			job.progress = 0
+			job.recoveries = recoveries
+			job.logs = (job.logs || []).concat([{ at: nowIso(), message: 'Server restart, job dimasukkan lagi ke antrian' }]).slice(-MAX_LOG)
 		}
+		count += 1
 	})
 	if (count) store.save()
-	setTimeout(tick, 500)
+	setTimeout(tick, 1500)
 	return count
+}
+
+/** ID job yang sedang berjalan (dipakai bersih-bersih supaya folder kerja aktif tidak terhapus). */
+function runningIds() {
+	return Array.from(running.keys())
+}
+
+/** Batalkan semua job yang sedang jalan. */
+function cancelAllRunning() {
+	running.forEach(function (state) {
+		state.canceled = true
+		jobctx.cancel(state.ctx)
+	})
+}
+
+/** Server dimatikan: hentikan proses ffmpeg tanpa menandai job batal (dilanjutkan saat start berikutnya). */
+function shutdown() {
+	stopping = true
+	let count = 0
+	running.forEach(function (state) {
+		count += jobctx.cancel(state.ctx) || 0
+	})
+	return { jobs: running.size, processes: count }
 }
 
 function stats() {
@@ -289,6 +343,9 @@ module.exports = {
 	summary: summary,
 	stats: stats,
 	recover: recover,
+	cancelAllRunning: cancelAllRunning,
+	runningIds: runningIds,
+	shutdown: shutdown,
 	setPaused: setPaused,
 	isPaused: isPaused,
 }

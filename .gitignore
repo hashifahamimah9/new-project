@@ -1,23 +1,27 @@
 # Node modules
 node_modules/
 
-# Local binaries & tools (large files)
-tools/node/
-tools/ffmpeg/
-tools/*.zip
-tools/*.exe
+# Konfigurasi pribadi (berisi API key) - jangan di-commit
+.env
 
-# Storage media & temp
-storage/renders/final/*.mp4
-storage/uploads/*.mp4
-storage/tmp/
-storage/cache/
+# Node.js & FFmpeg portable (diunduh otomatis oleh launcher)
+tools/
+
+# Database lokal & backup (dibuat otomatis saat server jalan)
+data/db.json
+data/db.json.*
+data/db-*.json
+data/backups/
+data/logs/
+
+# Storage media, cache & temp (hasil render, upload, audio, dll.)
+storage/
 cache/
 
 # Logs
-data/logs/*.log
 *.log
 
 # OS files
 Thumbs.db
 .DS_Store
+desktop.ini

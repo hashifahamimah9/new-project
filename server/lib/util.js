@@ -39,7 +39,23 @@ function writeJsonAtomic(file, data) {
 	ensureDir(path.dirname(file))
 	const tmp = `${file}.${process.pid}.tmp`
 	fs.writeFileSync(tmp, JSON.stringify(data, null, 2))
-	fs.renameSync(tmp, file)
+	// Di Windows rename bisa gagal sesaat (EPERM/EBUSY) kalau file sedang dibaca antivirus/indexer.
+	for (let attempt = 0; attempt < 5; attempt += 1) {
+		try {
+			fs.renameSync(tmp, file)
+			return
+		} catch (err) {
+			if (!['EPERM', 'EBUSY', 'EACCES'].includes(err.code)) throw err
+			const until = Date.now() + 40 * (attempt + 1)
+			while (Date.now() < until) {
+				/* tunggu sebentar lalu coba lagi */
+			}
+		}
+	}
+	fs.copyFileSync(tmp, file)
+	try {
+		fs.unlinkSync(tmp)
+	} catch (err) {}
 }
 
 function slugify(input, fallback = 'item') {
@@ -120,11 +136,12 @@ function formatDuration(seconds) {
 }
 
 function srtTime(seconds) {
-	const total = Math.max(0, Number(seconds) || 0)
-	const h = Math.floor(total / 3600)
-	const m = Math.floor((total % 3600) / 60)
-	const s = Math.floor(total % 60)
-	const ms = Math.round((total - Math.floor(total)) * 1000)
+	// Hitung dari total milidetik supaya tidak pernah muncul ",1000".
+	const totalMs = Math.round(Math.max(0, Number(seconds) || 0) * 1000)
+	const h = Math.floor(totalMs / 3600000)
+	const m = Math.floor((totalMs % 3600000) / 60000)
+	const s = Math.floor((totalMs % 60000) / 1000)
+	const ms = totalMs % 1000
 	return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')},${String(ms).padStart(3, '0')}`
 }
 
@@ -264,6 +281,7 @@ function deepMerge(base, patch) {
 	if (typeof patch !== 'object') return patch
 	const out = Array.isArray(base) ? {} : Object.assign({}, base || {})
 	for (const [key, value] of Object.entries(patch)) {
+		if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue
 		if (value && typeof value === 'object' && !Array.isArray(value)) {
 			out[key] = deepMerge(out[key] || {}, value)
 		} else {
@@ -281,21 +299,67 @@ function dayKey(date = new Date(), timeZone) {
 	}
 }
 
-function localTimeParts(date = new Date(), timeZone) {
+const WEEKDAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
+
+/** Tanggal & jam lokal di zona waktu tertentu (default: zona waktu komputer). */
+function localDateParts(date = new Date(), timeZone) {
 	try {
-		const fmt = new Intl.DateTimeFormat('en-GB', {
-			timeZone,
+		const fmt = new Intl.DateTimeFormat('en-US', {
+			timeZone: timeZone || undefined,
+			hourCycle: 'h23',
+			year: 'numeric',
+			month: '2-digit',
+			day: '2-digit',
 			hour: '2-digit',
 			minute: '2-digit',
+			second: '2-digit',
 			weekday: 'short',
-			hour12: false,
 		})
-		const parts = fmt.formatToParts(date)
-		const get = (t) => (parts.find((p) => p.type === t) || {}).value
-		return { hour: Number(get('hour')), minute: Number(get('minute')), weekday: String(get('weekday') || '').toLowerCase() }
+		const parts = {}
+		for (const part of fmt.formatToParts(date)) parts[part.type] = part.value
+		const weekday = String(parts.weekday || '').toLowerCase().slice(0, 3)
+		return {
+			year: Number(parts.year),
+			month: Number(parts.month),
+			day: Number(parts.day),
+			hour: Number(parts.hour) % 24,
+			minute: Number(parts.minute),
+			second: Number(parts.second),
+			weekday: weekday,
+			weekdayIndex: WEEKDAYS.indexOf(weekday),
+		}
 	} catch (err) {
-		return { hour: date.getHours(), minute: date.getMinutes(), weekday: 'mon' }
+		return {
+			year: date.getFullYear(),
+			month: date.getMonth() + 1,
+			day: date.getDate(),
+			hour: date.getHours(),
+			minute: date.getMinutes(),
+			second: date.getSeconds(),
+			weekday: WEEKDAYS[date.getDay()],
+			weekdayIndex: date.getDay(),
+		}
 	}
+}
+
+function localTimeParts(date = new Date(), timeZone) {
+	const parts = localDateParts(date, timeZone)
+	return { hour: parts.hour, minute: parts.minute, weekday: parts.weekday }
+}
+
+/** Selisih zona waktu (ms) terhadap UTC pada saat `date`. */
+function tzOffsetMs(date, timeZone) {
+	const p = localDateParts(date, timeZone)
+	const asUtc = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second)
+	return asUtc - Math.floor(date.getTime() / 1000) * 1000
+}
+
+/** Jam dinding (tanggal + HH:MM) di zona waktu tertentu -> objek Date (UTC). */
+function zonedTimeToDate(year, month, day, hour, minute, timeZone) {
+	const guess = Date.UTC(year, month - 1, day, hour, minute, 0)
+	let ts = guess - tzOffsetMs(new Date(guess), timeZone)
+	ts = guess - tzOffsetMs(new Date(ts), timeZone)
+	return new Date(ts)
 }
 
 module.exports = {
@@ -325,4 +389,7 @@ module.exports = {
 	deepMerge,
 	dayKey,
 	localTimeParts,
+	localDateParts,
+	zonedTimeToDate,
+	WEEKDAYS,
 }

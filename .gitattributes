@@ -1,0 +1,13 @@
+# Pastikan file Windows selalu memakai CRLF (juga saat download ZIP dari GitHub)
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.vbs text eol=crlf
+*.ps1 text eol=crlf
+# File lain dinormalisasi ke LF
+*.js text eol=lf
+*.json text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.md text eol=lf
+*.txt text eol=crlf
+.env.example text eol=lf

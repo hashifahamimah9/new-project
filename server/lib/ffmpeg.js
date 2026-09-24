@@ -7,6 +7,7 @@ const fs = require('fs')
 const path = require('path')
 const { PATHS } = require('./config')
 const { ensureDir, uid, findFont, escapeDrawText, clamp } = require('./util')
+const jobctx = require('./jobctx')
 
 function findBinary(name) {
 	const envKey = name.toUpperCase() + '_PATH'
@@ -31,7 +32,8 @@ function findBinary(name) {
 	for (const candidate of candidates) {
 		if (fs.existsSync(candidate)) return candidate
 	}
-	return process.env[envKey] || name
+	// Tidak ada file lokal: pakai yang ada di PATH sistem.
+	return name
 }
 
 const FFMPEG = findBinary('ffmpeg')
@@ -48,8 +50,10 @@ function run(args, options) {
 	const opts = options || {}
 	const base = ['-hide_banner', '-nostdin', '-y']
 	const full = opts.onProgress ? base.concat(['-progress', 'pipe:1', '-loglevel', 'error'], args) : base.concat(args)
+	if (jobctx.isCanceled()) return Promise.reject(jobctx.canceledError())
 	return new Promise(function (resolve, reject) {
-		const child = spawn(FFMPEG, full, { cwd: opts.cwd || PATHS.tmp })
+		const child = spawn(FFMPEG, full, { cwd: opts.cwd || ensureDir(PATHS.tmp), windowsHide: true })
+		jobctx.track(child)
 		let stderr = ''
 		let killer = null
 		if (opts.timeoutMs) {
@@ -78,15 +82,39 @@ function run(args, options) {
 		})
 		child.on('close', function (code) {
 			if (killer) clearTimeout(killer)
-			if (code === 0) resolve({ ok: true, stderr: stderr })
-			else reject(new Error('ffmpeg exit ' + code + ': ' + stderr.slice(-800)))
+			if (code === 0) return resolve({ ok: true, stderr: stderr })
+			if (jobctx.isCanceled()) return reject(jobctx.canceledError())
+			reject(new Error('ffmpeg exit ' + code + ': ' + stderr.slice(-800)))
+		})
+	})
+}
+
+/** Baris pertama `ffmpeg -version`, mis. "ffmpeg version 7.1 ...". */
+function version() {
+	return new Promise(function (resolve, reject) {
+		let out = ''
+		let child = null
+		try {
+			child = spawn(FFMPEG, ['-hide_banner', '-version'], { windowsHide: true })
+		} catch (err) {
+			return reject(new Error('ffmpeg tidak bisa dijalankan: ' + err.message))
+		}
+		child.stdout.on('data', function (chunk) {
+			out += chunk.toString()
+		})
+		child.on('error', function (err) {
+			reject(new Error('ffmpeg tidak ditemukan (' + FFMPEG + '): ' + err.message))
+		})
+		child.on('close', function (code) {
+			if (code !== 0) return reject(new Error('ffmpeg -version keluar dengan kode ' + code))
+			resolve(out.split(/\r?\n/)[0].trim())
 		})
 	})
 }
 
 function probe(file) {
 	return new Promise(function (resolve, reject) {
-		const child = spawn(FFPROBE, ['-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', file])
+		const child = spawn(FFPROBE, ['-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', file], { windowsHide: true })
 		let out = ''
 		let err = ''
 		child.stdout.on('data', function (c) {
@@ -142,12 +170,14 @@ async function durationOf(file) {
 
 function encodeArgs(options) {
 	const o = options || {}
+	const fps = Number(o.fps) || 30
 	return [
 		'-c:v', 'libx264',
 		'-preset', o.preset || 'veryfast',
 		'-crf', String(o.crf === undefined ? 21 : o.crf),
 		'-pix_fmt', 'yuv420p',
-		'-r', String(o.fps || 30),
+		'-r', String(fps),
+		'-g', String(Math.round(fps * 2)),
 		'-movflags', '+faststart',
 		'-c:a', 'aac',
 		'-b:a', '160k',
@@ -185,6 +215,8 @@ function drawText(label, out, text, options) {
 	const parts = [
 		'drawtext=fontfile=' + SQ + formatFontPath(font) + SQ,
 		'text=' + SQ + escapeDrawText(text) + SQ,
+		// expansion=none: teks seperti "diskon 50%" tampil apa adanya (bukan dianggap ekspresi)
+		'expansion=none',
 		'fontcolor=' + (o.color || 'white'),
 		'fontsize=' + (o.size || 48),
 		'x=' + (o.x || '(w-text_w)/2'),
@@ -203,7 +235,12 @@ async function imageToClip(options) {
 	const height = o.height || 1920
 	const fps = o.fps || 30
 	const duration = Math.max(1, Number(o.duration) || 5)
-	const big = { w: width * 2, h: height * 2 }
+	// Gambar diperbesar dulu supaya zoom/pan halus. Untuk 4K cukup 1.5x (hemat RAM & waktu).
+	const factor = width * height > 2500000 ? 1.5 : 2
+	const even = function (n) {
+		return Math.round(n / 2) * 2
+	}
+	const big = { w: even(width * factor), h: even(height * factor) }
 	const chain = []
 	if (o.fit === 'crop') {
 		chain.push('[0:v]scale=' + big.w + ':' + big.h + ':force_original_aspect_ratio=increase,crop=' + big.w + ':' + big.h + '[base]')
@@ -352,39 +389,50 @@ async function concatClips(options) {
 		return o.out
 	}
 	const dir = ensureDir(path.join(PATHS.tmp, 'concat_' + uid('', 6)))
-	const names = []
-	clips.forEach(function (clip, i) {
-		const name = 'part' + String(i).padStart(3, '0') + (path.extname(clip) || '.mp4')
-		fs.copyFileSync(clip, path.join(dir, name))
-		names.push(name)
-	})
-	fs.writeFileSync(
-		path.join(dir, 'list.txt'),
-		names
-			.map(function (n) {
-				return 'file ' + SQ + n + SQ
-			})
-			.join(NL),
-	)
-	await run(['-f', 'concat', '-safe', '0', '-i', 'list.txt', '-fps_mode', 'cfr'].concat(encodeArgs({ preset: o.preset, crf: o.crf, fps: o.fps || 30 }), [o.out]), {
-		cwd: dir,
-		onProgress: o.onProgress,
-		totalDuration: o.totalDuration,
-	})
 	try {
-		fs.rmSync(dir, { recursive: true, force: true })
-	} catch (err) {}
+		const names = []
+		clips.forEach(function (clip, i) {
+			const name = 'part' + String(i).padStart(3, '0') + (path.extname(clip) || '.mp4')
+			const target = path.join(dir, name)
+			// Hardlink lebih hemat disk daripada copy (fallback ke copy kalau beda drive).
+			try {
+				fs.linkSync(clip, target)
+			} catch (err) {
+				fs.copyFileSync(clip, target)
+			}
+			names.push(name)
+		})
+		fs.writeFileSync(
+			path.join(dir, 'list.txt'),
+			names
+				.map(function (n) {
+					return 'file ' + SQ + n + SQ
+				})
+				.join(NL),
+		)
+		await run(['-f', 'concat', '-safe', '0', '-i', 'list.txt'].concat(encodeArgs({ preset: o.preset, crf: o.crf, fps: o.fps || 30 }), [o.out]), {
+			cwd: dir,
+			onProgress: o.onProgress,
+			totalDuration: o.totalDuration,
+		})
+	} finally {
+		try {
+			fs.rmSync(dir, { recursive: true, force: true })
+		} catch (err) {}
+	}
 	return o.out
 }
 
-const SUB_STYLES = function (height) {
+const SUB_STYLES = function (width, height) {
 	const size = Math.round(height * 0.026)
 	const marginV = Math.round(height * 0.08)
+	// PlayResX & PlayResY harus sama dengan ukuran video, kalau tidak huruf subtitle jadi gepeng/melebar.
+	const res = 'PlayResX=' + width + ',PlayResY=' + height + ',WrapStyle=0,MarginL=' + Math.round(width * 0.07) + ',MarginR=' + Math.round(width * 0.07)
 	return {
-		'bold-center': 'PlayResY=' + height + ',FontName=Arial,FontSize=' + size + ',Bold=1,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=3,Shadow=1,Alignment=2,MarginV=' + marginV,
-		'karaoke-box': 'PlayResY=' + height + ',FontName=Arial,FontSize=' + size + ',Bold=1,PrimaryColour=&H00FFFFFF,BackColour=&HB0000000,BorderStyle=3,Outline=0,Shadow=0,Alignment=2,MarginV=' + marginV,
-		minimal: 'PlayResY=' + height + ',FontName=Arial,FontSize=' + Math.round(height * 0.022) + ',PrimaryColour=&H00FFFFFF,OutlineColour=&H80000000,BorderStyle=1,Outline=2,Alignment=2,MarginV=' + marginV,
-		yellow: 'PlayResY=' + height + ',FontName=Arial,FontSize=' + size + ',Bold=1,PrimaryColour=&H0000E5FF,OutlineColour=&H00000000,BorderStyle=1,Outline=3,Alignment=2,MarginV=' + marginV,
+		'bold-center': res + ',FontName=Arial,FontSize=' + size + ',Bold=1,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=3,Shadow=1,Alignment=2,MarginV=' + marginV,
+		'karaoke-box': res + ',FontName=Arial,FontSize=' + size + ',Bold=1,PrimaryColour=&H00FFFFFF,BackColour=&HB0000000,BorderStyle=3,Outline=0,Shadow=0,Alignment=2,MarginV=' + marginV,
+		minimal: res + ',FontName=Arial,FontSize=' + Math.round(height * 0.022) + ',PrimaryColour=&H00FFFFFF,OutlineColour=&H80000000,BorderStyle=1,Outline=2,Alignment=2,MarginV=' + marginV,
+		yellow: res + ',FontName=Arial,FontSize=' + size + ',Bold=1,PrimaryColour=&H0000E5FF,OutlineColour=&H00000000,BorderStyle=1,Outline=3,Alignment=2,MarginV=' + marginV,
 		none: null,
 	}
 }
@@ -392,7 +440,17 @@ const SUB_STYLES = function (height) {
 /** Mix akhir: voice over + musik loop + subtitle burn-in + watermark. */
 async function finalMix(options) {
 	const o = options || {}
-	const height = o.height || 1920
+	let width = Number(o.width) || 0
+	let height = Number(o.height) || 0
+	if (!width || !height) {
+		try {
+			const info = await mediaInfo(o.video)
+			width = width || info.width
+			height = height || info.height
+		} catch (err) {}
+	}
+	height = height || 1920
+	width = width || Math.round((height * 9) / 16)
 	const fps = o.fps || 30
 	const inputs = ['-i', o.video]
 	let index = 1
@@ -411,7 +469,7 @@ async function finalMix(options) {
 	const chain = []
 	let vLabel = '0:v'
 	if (o.srt && o.subtitleStyle && o.subtitleStyle !== 'none') {
-		const styles = SUB_STYLES(height)
+		const styles = SUB_STYLES(width, height)
 		const key = o.subtitleStyle
 		const style = styles[key]
 		if (style) {
@@ -538,10 +596,12 @@ async function naturalizeAudio(options) {
 	const o = options || {}
 	const parts = []
 	if (o.denoise) parts.push('afftdn=nf=-25')
-	const semitones = Number(o.pitch) || 0
+	const semitones = clamp(Number(o.pitch) || 0, -12, 12)
+	// Samakan sample rate dulu: asetrate di bawah mengasumsikan input 48 kHz.
+	parts.push('aresample=48000')
 	if (semitones !== 0) {
 		const ratio = Math.pow(2, semitones / 12)
-		parts.push('asetrate=48000*' + ratio.toFixed(6), 'aresample=48000', 'atempo=' + (1 / ratio).toFixed(6))
+		parts.push('asetrate=' + Math.round(48000 * ratio), 'aresample=48000', 'atempo=' + (1 / ratio).toFixed(6))
 	}
 	const tempo = clamp(o.speed === undefined ? 1 : Number(o.speed), 0.5, 2)
 	if (Math.abs(tempo - 1) > 0.01) parts.push('atempo=' + tempo.toFixed(3))
@@ -551,7 +611,7 @@ async function naturalizeAudio(options) {
 	const room = Number(o.room) || 0
 	if (room > 0) parts.push('aecho=0.8:0.75:' + Math.round(24 + clamp(room, 0, 1) * 60) + ':' + (0.06 + clamp(room, 0, 1) * 0.16).toFixed(3))
 	if (!parts.length) parts.push('anull')
-	await run(['-i', o.input, '-af', parts.join(','), '-ar', '48000', '-ac', '2', o.out])
+	await run(['-i', o.input, '-vn', '-af', parts.join(','), '-ar', '48000', '-ac', '2', o.out])
 	return o.out
 }
 
@@ -638,6 +698,8 @@ module.exports = {
 	FFPROBE: FFPROBE,
 	NL: NL,
 	run: run,
+	version: version,
+	SUB_STYLES: SUB_STYLES,
 	probe: probe,
 	mediaInfo: mediaInfo,
 	durationOf: durationOf,

@@ -1,192 +1,242 @@
 # UGC Flow Studio
 
-Web app self-hosted untuk:
+Aplikasi web self-hosted (jalan di PC kamu sendiri) untuk:
 
-1. **Generate video UGC otomatis dari foto produk** (upload foto -> skrip -> voice over -> video jadi).
-2. **Podcast AI** multi-host dengan suara natural + visual waveform.
-3. **Voice studio**: text-to-speech natural + ubah suara rekaman jadi lebih natural.
-4. **Live 24 jam ke YouTube**: masukkan file video + stream key, streaming jalan sendiri dan auto-reconnect.
-5. **Flow otomatis**: watch folder, jadwal harian, interval, dan webhook.
+1. **Video UGC otomatis dari foto produk**: foto -> skrip -> klip dari Google Flow -> voice over + subtitle -> video siap upload.
+2. **Podcast AI** 2 host (suara bisa beda) + visual waveform + subtitle.
+3. **Voice Studio**: text-to-speech natural (Fish Audio / Google gratis) + ubah rekaman jadi lebih natural.
+4. **Live 24 jam ke YouTube**: playlist video + stream key, auto-reconnect, lanjut sendiri setelah PC restart.
+5. **Flow otomatis**: watch folder, jadwal harian, interval, dan webhook (n8n / Zapier / Make).
 
-Dibuat dengan Node.js murni (tanpa dependency npm) + ffmpeg. Semua data disimpan lokal di folder proyek.
+Dibuat dengan Node.js murni (tanpa `npm install`) + ffmpeg. Semua data tersimpan lokal di folder proyek.
 
 ---
 
-## 1. Kebutuhan
+## 1. Cara menjalankan
 
-| Kebutuhan | Keterangan |
+### Windows (paling mudah)
+
+Klik 2x salah satu file ini:
+
+| File | Keterangan |
 | --- | --- |
-| Node.js 18+ | `node -v` |
-| ffmpeg + ffprobe | wajib, harus bisa dipanggil dari terminal (`ffmpeg -version`) |
-| Akun Flow Ultra | opsional, tapi ini yang bikin visual video benar-benar AI |
-| API TTS | opsional (ElevenLabs / OpenAI / custom). Tanpa ini suara pakai mode simulasi |
+| `KLIK-DISINI-UNTUK-MULAI.bat` | jendela server kelihatan (bisa lihat log) |
+| `Jalankan.vbs` | sama, tapi jendela server langsung diperkecil ke taskbar |
 
-Install ffmpeg:
+Launcher otomatis:
 
-- Windows: `winget install Gyan.FFmpeg` atau download dari ffmpeg.org, lalu tambahkan ke PATH
-- macOS: `brew install ffmpeg`
-- Ubuntu/Debian: `sudo apt install ffmpeg`
+- membuat file `.env` dari `.env.example` (kalau belum ada),
+- mengunduh **Node.js** dan **FFmpeg portable** ke folder `tools\` kalau belum terpasang (atau Node.js di PC terlalu lama, < v18),
+- menutup server lama yang masih jalan di port yang sama,
+- membuka browser ke **http://localhost:8787**.
 
----
+Tutup jendela server (atau Ctrl+C) untuk berhenti.
 
-## 2. Cara Jalan (3 langkah)
+### macOS / Linux
 
 ```bash
-cp .env.example .env      # Windows: copy .env.example .env
-npm run doctor            # cek node, ffmpeg, folder, konfigurasi
-npm start
+cp .env.example .env
+npm run doctor     # cek node, ffmpeg, folder, konfigurasi
+npm start          # buka http://localhost:8787
 ```
 
-Buka **http://localhost:8787**
+Butuh Node.js 18+ dan ffmpeg (`brew install ffmpeg` / `sudo apt install ffmpeg fonts-dejavu`).
 
-Tidak ada `npm install` karena proyek ini nol dependency.
+### Cek kesehatan (doctor)
 
----
-
-## 3. Isi API Key (bisa dari UI, tanpa edit file)
-
-Buka menu **Settings** di web, isi lalu klik **Test** di setiap provider:
-
-### Flow Ultra (video + gambar)
-
-| Field | Isi |
-| --- | --- |
-| Provider | `flow` |
-| Base URL | endpoint API Flow kamu |
-| API Key | API key Flow Ultra |
-| Default lane | `low` = **lower priority / unlimited** |
-| Auto fallback ke low | `on` (kalau kuota standard habis, otomatis pindah ke lower priority) |
-| Lower priority concurrency | 2 (boleh dinaikkan karena unlimited) |
-| Standard daily limit | batas harian lane standard |
-
-Lane `low` dipakai default supaya semua render masuk mode **lower priority yang unlimited**. Lane `standard` hanya dipakai kalau kamu pilih sendiri di form render, dan pemakaiannya dihitung di menu Analytics.
-
-### Voice (TTS)
-
-| Provider | Catatan |
-| --- | --- |
-| `elevenlabs` | paling natural, isi API key + voice id |
-| `openai` | model `gpt-4o-mini-tts` |
-| `custom` | endpoint sendiri yang mengembalikan audio |
-| `simulate` | tanpa API, suara placeholder, dipakai untuk tes alur |
-
-Semua hasil TTS lewat **naturalizer** ffmpeg: EQ, kompresi, de-esser, room reverb, dan denoise. Preset: `podcast-warm`, `ugc-bright`, `radio-clean`, `asmr-soft`, `voice-over-tv`.
-
-### Penulis skrip (opsional)
-
-Provider `local` memakai template bawaan (8 angle jualan, 6 persona) tanpa API. Provider `remote` memakai API OpenAI-compatible untuk skrip yang lebih variatif.
-
-### YouTube Live
-
-| Field | Isi |
-| --- | --- |
-| RTMP URL | `rtmp://a.rtmp.youtube.com/live2` |
-| Stream key | ambil di YouTube Studio > Go Live > Stream key |
+`npm run doctor` (Windows tanpa Node terpasang: `tools\node\node.exe scripts\doctor.js`) mengecek Node, ffmpeg + encoder, font, folder, port, database, API key yang aktif, voice Fish Audio, LLM, stream key (tersamar), dan setelan keamanan. Aman dijalankan walau server sedang jalan (tidak mengubah database).
 
 ---
 
-## 4. Alur Pemakaian
+## 2. Yang perlu kamu isi sendiri (API key)
 
-### A. Video UGC dari foto produk
+Isi di file `.env` **atau** dari menu **Settings** di web (klik tombol **Tes** di tiap bagian). Kalau nilai di `.env` diubah, nilai baru otomatis dipakai saat server dinyalakan ulang.
 
-1. Menu **UGC Studio** -> drag & drop foto produk (bisa banyak sekaligus).
-2. Isi nama produk, benefit, masalah yang dipecahkan, angle, dan persona.
-3. Klik **Buat skrip** -> skrip per scene muncul dan **masih bisa diedit**.
-4. Atur mode render:
-   - `flow-video`: tiap scene jadi video AI dari Flow Ultra (paling bagus)
-   - `flow-image`: Flow generate gambar, lalu dianimasikan (lebih cepat & hemat)
-   - `local`: animasi Ken Burns dari foto kamu sendiri (paling cepat, tanpa API)
-5. Klik **Render**. Progres jalan real-time. Hasil masuk **Library**.
+| Kebutuhan | Variabel `.env` | Catatan |
+| --- | --- | --- |
+| **Fish Audio** (suara utama) | `FISHAUDIO_API_KEY`, `FISHAUDIO_VOICE_ID` | API key dari https://fish.audio (menu API Keys). Voice ID = `reference_id` 32 karakter dari halaman voice/model |
+| Voice kedua (opsional) | `FISHAUDIO_VOICE_ID_2` | dipakai Host B di Podcast AI supaya 2 host beda suara (juga bisa diisi di Settings > "Voice ID Host B") |
+| **Flow API** (opsional) | `FLOW_PROVIDER=flow`, `FLOW_BASE_URL`, `FLOW_API_KEY` | hanya kalau punya endpoint API Flow. Tanpa API tetap bisa pakai **Google Flow di browser + ekstensi** (lihat bagian 4A) |
+| **LLM** penulis skrip (opsional) | `LLM_PROVIDER=remote`, `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL` | API apa saja yang kompatibel OpenAI (OpenAI, OpenRouter, Groq, DeepSeek, Ollama lokal). Tanpa ini pakai template lokal gratis |
+| **YouTube stream key** | `YT_STREAM_KEY` | dari YouTube Studio > Go Live > Stream. Bisa juga diisi per channel di menu Live 24 Jam |
 
-Opsi berguna: aspect 9:16 / 1:1 / 16:9, resolusi sampai 4K, subtitle otomatis (5 gaya), music bed (lofi/upbeat/cinematic/calm), watermark, **variants** (1 brief jadi sampai 10 versi berbeda untuk A/B test), dan **per asset** (tiap foto jadi video sendiri, sekali klik).
+Tanpa API key apa pun aplikasi tetap jalan penuh:
 
-### B. Podcast AI
+- **Suara**: kalau key Fish Audio kosong / ditolak / saldo habis, otomatis pindah ke **Google TTS gratis** (butuh internet), lalu suara placeholder kalau offline. Render tidak pernah gagal gara-gara suara; alasannya dicatat di log job dan terlihat di status **TTS** pada sidebar.
+- **Visual**: mode `simulate` membuat video dari foto kamu sendiri (gerak kamera Ken Burns).
+- **Skrip**: template bawaan (8 angle jualan, beberapa persona). Kalau LLM remote gagal / habis kuota, otomatis kembali ke template lokal.
 
-Menu **Podcast** -> isi topik, jumlah host + suara masing-masing, durasi, tone. Klik buat skrip, edit dialog kalau perlu, lalu render. Output: MP4 (visual waveform + subtitle) dan MP3 siap upload.
+Semua key disimpan lokal (`.env` / `data/db.json`), ditampilkan tersamar di UI, dan **tidak ikut ter-upload ke GitHub** (keduanya ada di `.gitignore`).
 
-### C. Voice Studio
+---
 
-- Tab **Text to Speech**: tempel teks (panjang otomatis dipotong dan disambung), pilih voice + preset natural.
-- Tab **Ubah suara natural**: upload rekaman lama (audio atau video), atur pitch/speed/room/denoise, hasilnya jadi lebih natural.
+## 3. Keamanan (baru di v1.1.0)
 
-### D. Live 24 Jam YouTube
+- **Website lain diblokir**: halaman web lain yang kamu buka di browser tidak bisa mengontrol studio lewat `localhost` (proteksi CSRF, CORS, dan DNS rebinding). Yang selalu boleh: localhost, alamat IP, nama PC, domain `.local` / `.lan`, Google Flow (`flow.google.com`, `labs.google`) dan ekstensi browser.
+- **Pakai tunnel / domain sendiri** (ngrok, cloudflared, dll.)? Tambahkan domainnya ke `ALLOWED_HOSTS` di `.env` (pisahkan dengan koma). Website lain yang memang perlu memanggil API: isi `CORS_ORIGINS`, contoh `CORS_ORIGINS=https://studio.domainkamu.com`.
+- **Dibuka dari internet / jaringan lain?** Aktifkan login: `AUTH_ENABLED=true` + `AUTH_PASSWORD=...`.
+- **Import dari Downloads** hanya boleh untuk file video yang benar-benar ada di folder Downloads (tidak bisa mengambil file sembarang di komputer). Folder Downloads dideteksi otomatis (termasuk kalau dipindah ke drive lain); bisa diganti lewat `DOWNLOADS_DIR`.
 
-1. Menu **Live 24/7** -> **Buat stream**.
-2. Pilih video dari Library / Assets (bisa beberapa, jadi playlist berurutan).
-3. Paste RTMP URL + stream key YouTube.
-4. Mode:
-   - `copy`: tanpa re-encode, CPU nyaris nol (pakai ini kalau video sudah H.264/AAC)
-   - `auto`: sistem cek file lalu pilih sendiri
-   - `encode`: re-encode ke resolusi/bitrate target
-5. Audio: pakai audio asli, ganti musik loop, atau silent.
-6. Klik **Start**. Centang **Auto start** supaya stream nyala lagi otomatis setiap server restart.
+---
 
-Fitur penjaga live: loop playlist tanpa putus, **auto-reconnect dengan backoff**, health check tiap 30 detik, log ffmpeg per stream, statistik uptime/fps/bitrate/speed, dan **Inspect** yang menghitung total durasi playlist, berapa kali loop per hari, serta estimasi kuota bandwidth per hari.
+## 4. Alur pemakaian
 
-### E. Flow Otomatis
+### A. Video UGC dari foto produk + Google Flow
 
-Menu **Automation**, pilih aksi (`ugc.render`, `podcast.render`, `voice.render`, `images.generate`, `stream.start`, `stream.restart`) dan trigger:
+1. Menu **UGC Studio** -> upload foto produk (bisa banyak sekaligus), isi brief produk.
+2. Klik **Buat skrip** -> skrip per scene muncul dan **bisa diedit**.
+3. Klik **Buka di Flow** pada scene: prompt disalin dan Google Flow terbuka. Tempel (Ctrl+V), klik Generate, lalu **Download** hasilnya.
+4. Studio memantau folder **Downloads**: klip yang di-download berurutan (dalam `FLOW_INGEST_SETTLE_SECONDS`, default 20 detik) **digabung jadi 1 video**, diberi voice over + subtitle, lalu masuk **Library**.
+   - Tombol **Cek & Ambil Video dari Downloads** = ambil manual.
+   - **Pilih File Video Manual** bisa pilih sampai 20 klip sekaligus (diurutkan sesuai nama file).
+5. Tanpa Flow: pilih sumber visual **Lokal saja**, klik **Render video sekarang**.
 
-| Trigger | Cara kerja |
+Opsi render: rasio 9:16 / 1:1 / 16:9, resolusi **480p sampai 2160p (4K)** termasuk **1440p (2K)**, 5 gaya subtitle, musik latar, watermark, **variasi** (1 brief jadi sampai 10 versi berbeda: hook, urutan gambar dan gerak kamera lain), dan **1 video per foto** (batch).
+
+### B. Ekstensi Chrome "UGC Flow Connector"
+
+Panel kecil di Google Flow yang menampilkan prompt scene aktif dari studio + tombol **Masukkan & Generate** / **Salin**.
+
+Pasang: `chrome://extensions` -> aktifkan **Developer mode** -> **Load unpacked** -> pilih folder `extension` di proyek ini. Panduan lengkap: `extension/PANDUAN-PASANG.txt`.
+
+- Ganti `PORT` / server di komputer lain? Klik ikon ekstensi, isi **Alamat server UGC Studio** (mis. `http://localhost:9000`), klik **Simpan alamat**. Popup juga menampilkan status koneksi + versi server.
+- **Setelah update proyek**, buka `chrome://extensions` lalu klik **Reload** di kartu ekstensi.
+
+### C. Podcast AI
+
+Menu **Podcast AI** -> topik, jumlah host, durasi, tone -> buat skrip -> edit dialog -> render. Host A memakai `FISHAUDIO_VOICE_ID`, Host B memakai `FISHAUDIO_VOICE_ID_2` (kalau kosong: voice yang sama dengan pitch sedikit berbeda). Output MP4 (waveform + subtitle) dan MP3.
+
+### D. Voice Studio
+
+- **Text to Speech**: teks panjang otomatis dipotong dan disambung, pilih voice + preset natural (`podcast-warm`, `ugc-bright`, `radio-clean`, `asmr-soft`, `voice-over-tv`).
+- **Ubah suara natural**: upload rekaman (audio / video), atur pitch, speed, room, denoise.
+- Hasil TTS disimpan di cache (`TTS_CACHE=1`) supaya teks yang sama tidak menghabiskan kredit lagi.
+
+### E. Live 24 Jam YouTube
+
+1. Menu **Live 24 Jam** -> **Buat channel live** -> pilih video (bisa beberapa, jadi playlist).
+2. Stream key: tempel di form, atau **kosongkan** untuk memakai key default (`YT_STREAM_KEY` / Settings > Live). Channel dengan key kosong selalu memakai key default terbaru, jadi cukup ganti di satu tempat. URL lengkap `rtmp://server/app/KEY` juga diterima.
+3. Mode: `auto` (copy / hemat CPU hanya kalau semua video H.264 dan ukurannya sudah sama dengan resolusi + rasio yang dipilih; selain itu encode ulang), `copy`, atau `encode`. Tombol **Inspect** menampilkan mode yang akan dipakai beserta alasannya.
+4. Pilih resolusi (480p - 4K) dan rasio (16:9 horizontal / 9:16 vertikal). 4K butuh bitrate +-20000k dan upload kencang.
+5. Centang **Auto start** supaya live nyala lagi otomatis setelah server / PC restart.
+
+Penjaga live: loop tanpa putus, auto-reconnect dengan backoff, health check, log ffmpeg per channel, statistik uptime/fps/bitrate, dan **Inspect** (durasi playlist, loop per hari, estimasi kuota bandwidth).
+
+### F. Flow Otomatis (automation)
+
+Aksi: `ugc.render`, `podcast.render`, `voice.render`, `images.generate`, `stream.start`, `stream.restart`.
+
+| Pemicu | Cara kerja |
 | --- | --- |
-| `watch-folder` | taruh foto produk ke `storage/inbox` -> video langsung dibuat sendiri |
-| `schedule` | jam tertentu + pilihan hari (zona waktu Asia/Jakarta) |
+| `watch-folder` | taruh file ke folder pantauan (default `storage/inbox`, bisa folder lain). Beberapa foto 1 produk: masukkan ke **1 subfolder** (nama subfolder = nama produk) atau beri nama `serum-1.jpg`, `serum-2.jpg`. File `.txt` dipakai sebagai naskah (Voice / Podcast / Gambar). File yang masih disalin ditunggu sampai selesai |
+| `schedule` | jam tertentu + hari (`0,1,2...6` atau `sen,rab,jum`). Zona waktu dari `TIMEZONE` di `.env`. Jadwal yang terlewat karena PC mati masih dijalankan kalau telatnya < 3 jam |
 | `interval` | tiap N menit |
-| `webhook` | POST ke `/api/hooks/<token>` dari n8n, Zapier, Make, atau cron |
-| `manual` | tombol Run |
+| `webhook` | POST JSON ke `/api/hooks/<token>` dari n8n / Zapier / Make / cron |
+| `manual` | tombol **Run sekarang** (untuk watch folder = cek folder saat itu juga) |
 
 ---
 
-## 5. Fitur Tambahan
+## 5. Fitur lain
 
-- **Dashboard**: statistik render, job aktif, status live, grafik pemakaian 14 hari.
-- **Job queue**: concurrency, retry otomatis, pause/resume, cancel, log per job, dan recovery job yang tergantung saat server mati.
-- **Library**: video, audio, skrip, podcast. Preview, copy caption + hashtag, download, hapus.
-- **Assets**: semua foto/video/audio, upload manual atau dari inbox.
-- **Brand kit**: warna, watermark, CTA, hashtag, tone, audience. Otomatis dipakai skrip dan render.
-- **Real-time SSE**: progres job, log, dan status live update sendiri tanpa refresh.
-- **Analytics**: render per hari, pemakaian lane low vs standard, jumlah gambar dan karakter TTS.
-- **Logs**: log sistem terpusat.
-- **Notifikasi webhook**: kirim ke Discord/Slack/n8n saat job selesai, job gagal, atau live putus.
-- **Basic auth**: isi `AUTH_USER` + `AUTH_PASSWORD` kalau di-host online.
-- **Cleanup & reset**: hapus file temporary atau reset database dari menu Settings.
+- **Dashboard**: statistik render, job aktif, status live, grafik pemakaian 14 hari. Sidebar menampilkan status Flow, TTS, dan koneksi realtime.
+- **Job queue**: render paralel (`QUEUE_CONCURRENCY`), retry otomatis, pause, **cancel yang benar-benar menghentikan ffmpeg**, log per job, dan job yang terputus saat PC mati **dilanjutkan otomatis** saat server nyala.
+- **Library & Aset**: preview, salin caption + hashtag, download, hapus.
+- **Brand kit**: warna, watermark, CTA, hashtag, tone, audience -> otomatis dipakai skrip dan render.
+- **Real-time**: progres job, log, dan status live update sendiri (SSE), otomatis sinkron lagi setelah koneksi putus.
+- **Notifikasi webhook** (`NOTIFY_WEBHOOK_URL`): Discord / Slack / n8n saat job selesai, gagal, atau live putus.
+- **Bersih-bersih** (Settings): hapus file temporary, cache TTS lama, dan aset yatim; file yang masih dipakai live / job aktif tidak disentuh. Log lama dihapus otomatis.
+- **Buka dari HP** (Wi-Fi sama): alamat LAN ditampilkan di jendela server. Aktifkan login kalau dipakai bersama.
 
 ---
 
-## 6. Struktur Folder
+## 6. Data, backup & update
+
+- Database: `data/db.json` (**tidak** disimpan di GitHub). Backup harian otomatis di `data/backups/` (7 hari terakhir).
+- Kalau `db.json` rusak **atau hilang**, server otomatis memulihkan dari backup terbaru (file rusak disalin dulu sebagai `db.json.corrupt-...`).
+- Hasil render, upload, audio: folder `storage/`. Konfigurasi: `.env`.
+
+### Update aplikasi
+
+**Kalau folder ini hasil `git clone`**: klik 2x `UPDATE-APLIKASI.bat` (server ditutup dulu, `data/db.json` diamankan, lalu `git pull`).
+
+**Update pertama ke v1.1.0** (sebelum `UPDATE-APLIKASI.bat` ada): `data/db.json` sekarang tidak lagi disimpan di git, jadi `git pull` biasa akan menghapus file itu atau gagal. Amankan dulu (Command Prompt di folder proyek):
+
+```bat
+copy data\db.json data\db-backup.json
+git checkout -- data/db.json
+git pull
+move /y data\db-backup.json data\db.json
+```
+
+Setelah itu `db.json` aman dan tidak akan ikut ter-commit lagi.
+
+**Kalau download ZIP dari GitHub**: ekstrak lalu timpa isi folder lama. Folder `data`, `storage`, `tools` dan file `.env` tidak ada di ZIP, jadi tidak tertimpa.
+
+Setelah update: jalankan lagi launcher, dan **Reload** ekstensi Chrome.
+
+---
+
+## 7. Struktur folder
 
 ```
-ugc-flow-studio/
-  server/
-    index.js            # HTTP server + semua REST API
-    lib/                # config, store (json db), queue, events, ffmpeg, http, multipart
-    providers/          # flow (video/gambar), tts (suara), llm (skrip)
-    services/           # studio (render), stream (live), automation (flow otomatis)
-  public/               # UI (HTML, CSS, JS vanilla)
-  scripts/doctor.js     # health check
-  storage/              # uploads, renders, audio, music, thumbs, tmp, inbox
-  data/db.json          # database JSON
+server/
+  index.js              # HTTP server + REST API + SSE
+  lib/                  # config, store (db json), queue, jobctx, events, ffmpeg, httpx, downloads
+  providers/            # flow (video/gambar), tts (suara), llm (skrip)
+  services/             # studio (render), stream (live), automation
+public/                 # UI (HTML, CSS, JS tanpa framework)
+extension/              # ekstensi Chrome untuk Google Flow
+scripts/                # doctor.js (cek kesehatan), reset.js
+data/                   # db.json, backups/, logs/ (dibuat otomatis)
+storage/                # uploads, renders, audio, inbox, tmp (dibuat otomatis)
+tools/                  # Node.js & FFmpeg portable (diunduh launcher)
 ```
 
 ---
 
-## 7. Troubleshooting
+## 8. Troubleshooting
 
 | Masalah | Solusi |
 | --- | --- |
-| `ffmpeg not found` | install ffmpeg atau set `FFMPEG_PATH` di `.env` |
-| Video jadi tapi visual placeholder | Flow masih mode `simulate`. Isi provider `flow` + API key di Settings |
-| Suara robotik | provider TTS masih `simulate`. Pakai ElevenLabs/OpenAI dan preset natural |
-| Teks/subtitle tidak muncul | font sistem tidak ada. Install `fonts-dejavu` (Linux) lalu render ulang |
-| Live gagal start | cek stream key, dan pastikan playlist tidak kosong. Lihat log di menu Live |
-| Live boros CPU | pakai mode `copy` dan siapkan video H.264/AAC dengan resolusi yang sama |
-| YouTube bilang bitrate tidak stabil | turunkan `videoBitrate` (misal 3000k) atau gunakan mode `copy` |
-| Port dipakai aplikasi lain | ubah `PORT` di `.env` |
+| `ffmpeg tidak ditemukan` | jalankan `KLIK-DISINI-UNTUK-MULAI.bat` (download otomatis) atau isi `FFMPEG_PATH` / `FFPROBE_PATH` di `.env` |
+| Status TTS "Voice Google (gratis)" padahal sudah isi Fish Audio | cek `FISHAUDIO_API_KEY` + saldo, klik **Tes suara** di Settings. Alasan fallback terlihat saat kursor diarahkan ke status TTS di sidebar dan di log job |
+| Voice Fish Audio tidak berubah | pastikan `FISHAUDIO_VOICE_ID` berisi 32 karakter hex (reference_id), lalu restart server |
+| Video Flow tidak terambil otomatis | pastikan file ter-download ke folder Downloads (cek `DOWNLOADS_DIR`), klik **Cek & Ambil Video dari Downloads** |
+| Panel ekstensi tidak muncul / "server offline" | server harus jalan; izinkan akses jaringan lokal di Chrome; cek alamat server di popup ekstensi; Reload ekstensi |
+| `Host ... tidak diizinkan` (403) | buka lewat `localhost` / IP, atau tambahkan domain ke `ALLOWED_HOSTS` |
+| `Permintaan dari website lain ... ditolak` (403) | tambahkan origin website itu ke `CORS_ORIGINS` kalau memang perlu |
+| Live gagal start | cek stream key dan playlist; lihat **Log streaming** di menu Live |
+| YouTube: bitrate tidak stabil | turunkan bitrate (mis. 3000k) atau pakai mode `copy` |
+| Port dipakai aplikasi lain | ganti `PORT` di `.env` (lalu isi alamat baru di popup ekstensi) |
+| Jadwal jalan di jam yang salah | cek `TIMEZONE` di `.env` (mis. `Asia/Jakarta`, `Asia/Makassar`, `Asia/Jayapura`) |
 
 ---
 
-## 8. Catatan
+## 9. Changelog
 
-- Render berat itu ffmpeg, jadi makin banyak core CPU makin cepat.
-- Untuk live 24 jam, jalankan di VPS dan pakai `pm2 start server/index.js --name ugc-flow` supaya tetap hidup.
-- Semua key disimpan di `data/db.json` lokal (ditampilkan tersamar di UI) dan tidak pernah dikirim ke pihak lain selain provider yang kamu isi sendiri.
+### v1.1.0
+
+**Perbaikan**
+
+- Launcher Windows: cek versi Node.js (min. 18, otomatis pakai Node portable kalau terlalu lama), line ending `.bat` konsisten (CRLF), server lama ditutup dulu sebelum start; kalau port masih dipakai studio yang sama, cukup buka browser (tidak error).
+- Pilihan resolusi 1440p / 4K dan rasio live benar-benar dipakai; subtitle tidak lagi gepeng; teks berisi `%` (mis. "diskon 50%") tampil apa adanya.
+- Cancel job menghentikan proses ffmpeg; job yang terputus saat PC mati dilanjutkan otomatis.
+- TTS: fallback Fish Audio -> Google gratis -> placeholder dengan alasan yang jelas; `FISHAUDIO_VOICE_ID` yang diganti di `.env` langsung dipakai; tidak ada retry berulang saat key ditolak.
+- Nilai `.env` yang diubah otomatis dipakai setelah restart (dulu tertimpa nilai lama di database).
+- Live: mode `auto` default, cek format sebelum `copy`, tidak ada 2 ffmpeg ke stream key yang sama, hitungan restart direset setelah stabil.
+- Automation: zona waktu, jadwal terlewat (maks 3 jam), watch folder menunggu file selesai disalin.
+- Database: tulis atomik (tahan antivirus Windows), backup harian + pemulihan otomatis kalau rusak / hilang.
+- UI: sinkron ulang otomatis setelah koneksi putus, notifikasi berwarna, beberapa tombol dan form yang sebelumnya tidak bekerja.
+- Ekstensi: aman dari XSS, tidak berkedip, tombol Generate yang dipilih tepat, dukung `labs.google`.
+
+**Fitur baru**
+
+- Proteksi keamanan (blokir website lain / DNS rebinding) + `ALLOWED_HOSTS`, `CORS_ORIGINS`.
+- Voice kedua Fish Audio untuk Host B podcast (`FISHAUDIO_VOICE_ID_2`).
+- Beberapa klip Flow sekaligus digabung jadi 1 video (auto dari Downloads atau pilih manual).
+- Variasi video yang benar-benar berbeda (hook, urutan gambar, gerak kamera).
+- Watch folder: grup per subfolder / nama file, `.txt` sebagai naskah, folder pantauan bisa diganti.
+- Popup ekstensi: status koneksi + pengaturan alamat server.
+- `UPDATE-APLIKASI.bat` untuk update 1 klik.
+- Doctor lebih lengkap dan aman dijalankan saat server hidup.
+- Bersih-bersih cache TTS lama & aset yatim, log lama dihapus otomatis.

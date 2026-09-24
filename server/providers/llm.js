@@ -32,7 +32,7 @@ const PERSONAS = [
 const HOOKS = {
 	'review-jujur': ['Aku beli {product} pakai duit sendiri, jadi review ini jujur banget.', 'Katanya {product} bagus. Aku tes 7 hari, ini hasilnya.', 'Jangan beli {product} sebelum lihat video ini.'],
 	unboxing: ['Paket {product} baru sampai, kita buka bareng ya.', 'Isi paket {product} ini bikin aku kaget.', 'Unboxing {product}, ada bonus yang gak disangka.'],
-	'problem-solution': ['Capek banget sama {problem}? Aku juga, sampai nemu {product}.', 'Masalah {problem} akhirnya kelar gara-gara ini.', 'Kalau kamu masih {problem}, wajib lihat ini.'],
+	'problem-solution': ['Capek banget sama {problem}? Aku juga, sampai nemu {product}.', 'Akhirnya {problem} kelar gara-gara ini.', 'Kalau kamu masih ngalamin {problem}, wajib lihat ini.'],
 	storytelling: ['Tiga bulan lalu aku hampir nyerah sama {problem}.', 'Awalnya aku ragu beli {product}, sampai kejadian ini.', 'Cerita singkat kenapa aku sekarang stok {product} terus.'],
 	'before-after': ['Ini kondisi sebelum pakai {product}. Siap-siap kaget.', 'Before after 14 hari pakai {product}, bedanya keliatan.', 'Perbedaan sebelum dan sesudah pakai {product} nyata banget.'],
 	tutorial: ['Cara pakai {product} biar hasilnya maksimal, catat ya.', 'Banyak yang salah pakai {product}. Urutan benarnya gini.', '3 langkah pakai {product} buat hasil terbaik.'],
@@ -96,30 +96,117 @@ function cfg() {
 
 function isRemote() {
 	const c = cfg()
+	if (String(c.provider || '').toLowerCase() === 'local') return false
 	return Boolean(c.apiKey && c.baseUrl)
 }
 
+/** Base URL OpenAI-compatible -> endpoint /chat/completions. */
+function chatEndpoint(baseUrl) {
+	let base = String(baseUrl || '').trim().replace(/\/+$/, '')
+	if (/\/chat\/completions$/.test(base)) return base
+	try {
+		const u = new URL(base)
+		if (!u.pathname || u.pathname === '/') base += '/v1'
+	} catch (err) {}
+	return base + '/chat/completions'
+}
+
+/** Ambil objek JSON dari jawaban LLM (tahan terhadap ```json ... ``` dan teks tambahan). */
+function parseJsonLoose(content) {
+	const text = String(content || '').trim()
+	if (!text) throw new Error('LLM mengembalikan jawaban kosong')
+	const fenced = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '')
+	try {
+		return JSON.parse(fenced)
+	} catch (err) {}
+	const start = fenced.indexOf('{')
+	const end = fenced.lastIndexOf('}')
+	if (start !== -1 && end > start) {
+		try {
+			return JSON.parse(fenced.slice(start, end + 1))
+		} catch (err) {}
+	}
+	throw new Error('Jawaban LLM bukan JSON valid: ' + text.slice(0, 120))
+}
+
 /** Panggil LLM OpenAI-compatible dan minta output JSON. */
-async function chatJson(system, user) {
+async function chatJson(system, user, options) {
+	const o = options || {}
 	const c = cfg()
-	const base = String(c.baseUrl || '').replace(/\/+$/, '')
-	const res = await request(base + '/chat/completions', {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + c.apiKey },
-		body: {
-			model: c.model || 'gpt-4o-mini',
-			temperature: 0.8,
-			response_format: { type: 'json_object' },
-			messages: [
-				{ role: 'system', content: system },
-				{ role: 'user', content: user },
-			],
-		},
-		timeoutMs: 90000,
-		retries: 1,
-	})
-	const content = res.data && res.data.choices && res.data.choices[0] && res.data.choices[0].message ? res.data.choices[0].message.content : ''
-	return JSON.parse(content)
+	const url = chatEndpoint(c.baseUrl)
+	const body = {
+		model: c.model || 'gpt-4o-mini',
+		temperature: o.temperature === undefined ? 0.8 : o.temperature,
+		response_format: { type: 'json_object' },
+		messages: [
+			{ role: 'system', content: system },
+			{ role: 'user', content: user },
+		],
+	}
+	const send = function (payload) {
+		return request(url, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + c.apiKey },
+			body: payload,
+			timeoutMs: o.timeoutMs || 90000,
+			retries: o.retries === undefined ? 1 : o.retries,
+		})
+	}
+	let res
+	try {
+		res = await send(body)
+	} catch (err) {
+		// Sebagian provider tidak mendukung response_format -> ulang tanpa itu.
+		if (err.status === 400 && /response_format|json_object|not supported/i.test(err.message)) {
+			const copy = Object.assign({}, body)
+			delete copy.response_format
+			res = await send(copy)
+		} else {
+			throw err
+		}
+	}
+	const data = res.data
+	if (typeof data === 'string') throw new Error('Respons LLM bukan JSON (cek Base URL): ' + data.slice(0, 120))
+	const choice = data && data.choices && data.choices[0]
+	const content = choice && choice.message ? choice.message.content : choice && choice.text
+	return parseJsonLoose(content)
+}
+
+/** Tes koneksi LLM (dipakai tombol Tes di Settings). */
+async function testConnection() {
+	const c = cfg()
+	if (!isRemote()) {
+		if (c.apiKey && c.baseUrl) return { ok: true, mode: 'local', message: 'Provider masih "local" (template bawaan). Pilih "remote" supaya API key LLM dipakai.' }
+		return { ok: true, mode: 'local', message: 'Mode local (template bawaan) aktif - tidak butuh API. Isi Base URL + API key dan pilih "remote" untuk memakai LLM.' }
+	}
+	try {
+		const data = await chatJson('Balas HANYA JSON valid.', 'Balas {"ok":true,"pesan":"halo"}', { temperature: 0, retries: 0, timeoutMs: 30000 })
+		return { ok: true, mode: 'remote', message: 'Koneksi LLM OK (model ' + (c.model || 'gpt-4o-mini') + ')' + (data && data.pesan ? '' : '') }
+	} catch (err) {
+		return { ok: false, mode: 'remote', message: 'LLM gagal: ' + String(err.message || err).slice(0, 200) }
+	}
+}
+
+/** Potong teks untuk teks di layar: utamakan batas kalimat/klausa, lalu batas kata. */
+function shortText(text, maxChars) {
+	const clean = String(text || '').replace(/\s+/g, ' ').trim()
+	if (clean.length <= maxChars) return clean.replace(/[,;:]$/, '')
+	const clause = clean.split(/(?<=[.!?,;:])\s/)[0].replace(/[,;:]$/, '')
+	if (clause.length <= maxChars && clause.length >= 12) return clause
+	const words = clean.split(' ')
+	let out = ''
+	for (const word of words) {
+		if ((out + ' ' + word).trim().length > maxChars - 3) break
+		out = (out + ' ' + word).trim()
+	}
+	return (out || clean.slice(0, maxChars - 3)).replace(/[,;:.]$/, '') + '...'
+}
+
+function hashString(value) {
+	let h = 0
+	const s = String(value || '')
+	for (let i = 0; i < s.length; i += 1) h = (h * 31 + s.charCodeAt(i)) >>> 0
+	return h
 }
 
 function brandContext() {
@@ -139,49 +226,56 @@ function brandContext() {
 function localUgcScript(input) {
 	const o = input || {}
 	const brand = brandContext()
-	const product = o.product || 'produk ini'
-	const benefits = (o.benefits || '')
+	const product = String(o.product || 'produk ini').trim() || 'produk ini'
+	const benefits = String(o.benefits || '')
 		.split(/[,;\n]/)
 		.map(function (b) {
 			return b.trim()
 		})
 		.filter(Boolean)
 	const problem = o.problem || 'masalah yang bikin ribet tiap hari'
-	const angle = o.angle || 'review-jujur'
+	const variant = Math.max(1, Number(o.variant) || 1)
+	const seed = hashString(product) + (Number(o.seed) || 0) + (variant - 1) * 7
+	let angle = o.angle || 'review-jujur'
+	if (angle === 'auto' || angle === 'random' || !HOOKS[angle]) {
+		angle = ANGLES[(seed + variant - 1) % ANGLES.length].id
+	}
 	const persona = PERSONAS.find(function (p) {
 		return p.id === (o.persona || 'gen-z-casual')
 	}) || PERSONAS[0]
 	const sceneCount = Math.max(3, Math.min(Number(o.sceneCount) || 5, 10))
 	const sceneDuration = Math.max(2, Math.min(Number(o.sceneDuration) || 5, 12))
-	const seed = product.length + sceneCount
-	const hookList = HOOKS[angle] || HOOKS['review-jujur']
-	const hook = fill(pickIndex(hookList, seed), { product: product, problem: problem })
-	const lines = [hook]
-	lines.push(fill(pickIndex(AGITATE, seed + 1), { product: product, problem: problem }))
-	lines.push(fill(pickIndex(REVEAL, seed + 2), { product: product }))
-	const proofCount = Math.max(1, sceneCount - 4)
-	for (let i = 0; i < proofCount; i += 1) {
-		const benefit = benefits.length ? benefits[i % benefits.length] : 'hasilnya kelihatan lebih rapi dan praktis'
-		lines.push(fill(pickIndex(PROOF, seed + 3 + i), { benefit: benefit, product: product }))
+	const vars = { product: product, problem: problem }
+	const hook = fill(pickIndex(HOOKS[angle], seed), vars)
+	const cta = brand.cta || fill(pickIndex(CTAS, seed + 3), vars)
+	const benefitAt = function (i) {
+		return benefits.length ? benefits[i % benefits.length] : pickIndex(['hasilnya kelihatan lebih rapi dan praktis', 'kualitasnya di atas harga', 'pemakaiannya gampang banget', 'hasilnya tahan lama'], seed + i)
 	}
-	lines.push(brand.cta || fill(pickIndex(CTAS, seed + 9), { product: product }))
-	while (lines.length < sceneCount) {
-		lines.splice(lines.length - 1, 0, fill(pickIndex(PROOF, lines.length + seed), { benefit: benefits.length ? benefits[lines.length % benefits.length] : 'kualitasnya di atas harga', product: product }))
+	// Struktur: hook -> (masalah) -> solusi -> bukti -> CTA. Hook selalu pertama, CTA selalu terakhir.
+	const middleCount = sceneCount - 2
+	const middle = []
+	if (sceneCount >= 5) middle.push(fill(pickIndex(AGITATE, seed + 1), vars))
+	middle.push(fill(pickIndex(REVEAL, seed + 2), vars))
+	let proofIndex = 0
+	while (middle.length < middleCount) {
+		middle.push(fill(pickIndex(PROOF, seed + 3 + proofIndex), { benefit: benefitAt(proofIndex), product: product }))
+		proofIndex += 1
 	}
-	const scenes = lines.slice(0, sceneCount).map(function (narration, i) {
-		const visual = pickIndex(VISUALS, i + seed)
+	const lines = [hook].concat(middle.slice(0, middleCount), [cta])
+	const scenes = lines.map(function (narration, i) {
 		return {
 			index: i + 1,
 			narration: narration,
-			onScreenText: i === 0 ? String(narration).slice(0, 46) : String(narration).split(' ').slice(0, 7).join(' '),
-			visual: visual,
+			onScreenText: i === 0 ? shortText(narration, 46) : shortText(narration, 40),
+			visual: pickIndex(VISUALS, i + seed),
 			motion: o.motion && o.motion !== 'auto' ? o.motion : pickIndex(MOTIONS, i + seed),
 			duration: Math.max(sceneDuration, Math.ceil(estimateSpeechSeconds(narration) + 0.6)),
 		}
 	})
 	const title = product + ' - ' + (ANGLES.find(function (a) {
 		return a.id === angle
-	}) || ANGLES[0]).label
+	}) || ANGLES[0]).label + (variant > 1 ? ' (variasi ' + variant + ')' : '')
+	const tag = String(product).toLowerCase().replace(/[^a-z0-9]/g, '')
 	return {
 		source: 'local',
 		title: title,
@@ -189,11 +283,22 @@ function localUgcScript(input) {
 		angle: angle,
 		persona: persona.id,
 		voice: o.voice || persona.voice,
+		variant: variant,
 		scenes: scenes,
 		caption: hook + ' ' + (benefits[0] ? benefits[0] + '. ' : '') + (brand.cta || 'Cek link sekarang.'),
-		hashtags: brand.hashtags || '#fyp #review #racunbelanja #' + String(product).toLowerCase().replace(/[^a-z0-9]/g, ''),
-		cta: brand.cta || pickIndex(CTAS, seed),
+		hashtags: brand.hashtags || '#fyp #review #racunbelanja' + (tag ? ' #' + tag : ''),
+		cta: cta,
 	}
+}
+
+/** Hook alternatif untuk variasi ke-N (dipakai saat skrip sudah diedit manual). */
+function altHook(input, variant) {
+	const o = input || {}
+	const product = String(o.product || 'produk ini').trim() || 'produk ini'
+	const angle = HOOKS[o.angle] ? o.angle : ANGLES[(hashString(product) + (Number(variant) || 1)) % ANGLES.length].id
+	const list = HOOKS[angle] || HOOKS['review-jujur']
+	const seed = hashString(product) + (Math.max(1, Number(variant) || 1) - 1)
+	return fill(pickIndex(list, seed), { product: product, problem: o.problem || 'masalah yang bikin ribet tiap hari' })
 }
 
 async function generateUgcScript(input) {
@@ -214,27 +319,45 @@ async function generateUgcScript(input) {
 		'Durasi per scene: ' + (o.sceneDuration || 5) + ' detik' + String.fromCharCode(10) +
 		'Brand: ' + (brand.brandName || '-') + ', tone: ' + (brand.tone || '-') + ', audiens: ' + (brand.audience || '-') + String.fromCharCode(10) +
 		'CTA wajib: ' + (brand.cta || '-') + String.fromCharCode(10) +
-		'Hindari kata: ' + (brand.bannedWords || '-')
+		'Hindari kata: ' + (brand.bannedWords || '-') +
+		(Number(o.variant) > 1
+			? String.fromCharCode(10) + 'Ini variasi ke-' + Number(o.variant) + ' dari ' + (Number(o.variantCount) || Number(o.variant)) + ': buat hook, kalimat, dan urutan visual yang BERBEDA dari versi lain.'
+			: '')
+	const sceneCount = Math.max(2, Math.min(Number(o.sceneCount) || 5, 10))
 	try {
-		const data = await chatJson(system, user)
-		const scenes = (data.scenes || []).map(function (scene, i) {
-			return {
-				index: i + 1,
-				narration: scene.narration || '',
-				onScreenText: scene.onScreenText || String(scene.narration || '').slice(0, 40),
-				visual: scene.visual || pickIndex(VISUALS, i),
-				motion: scene.motion || pickIndex(MOTIONS, i),
-				duration: Math.max(Number(o.sceneDuration) || 5, Math.ceil(estimateSpeechSeconds(scene.narration) + 0.6)),
-			}
+		const data = await chatJson(system, user, { temperature: Number(o.variant) > 1 ? 0.95 : 0.8 })
+		const scenes = (Array.isArray(data.scenes) ? data.scenes : [])
+			.filter(function (scene) {
+				return scene && String(scene.narration || '').trim()
+			})
+			.slice(0, sceneCount)
+			.map(function (scene, i) {
+				const narration = String(scene.narration).trim()
+				return {
+					index: i + 1,
+					narration: narration,
+					onScreenText: String(scene.onScreenText || '').trim() || shortText(narration, 40),
+					visual: scene.visual || pickIndex(VISUALS, i),
+					motion: MOTIONS.indexOf(scene.motion) !== -1 ? scene.motion : pickIndex(MOTIONS, i),
+					duration: Math.max(Number(o.sceneDuration) || 5, Math.ceil(estimateSpeechSeconds(narration) + 0.6)),
+				}
+			})
+		if (!scenes.length) {
+			const fallback = localUgcScript(input)
+			fallback.warning = 'LLM tidak mengembalikan scene, pakai generator lokal'
+			return fallback
+		}
+		const persona = PERSONAS.find(function (p) {
+			return p.id === o.persona
 		})
-		if (!scenes.length) return localUgcScript(input)
 		return {
 			source: 'llm',
 			title: data.title || o.product,
 			hook: data.hook || scenes[0].narration,
 			angle: o.angle || 'review-jujur',
 			persona: o.persona || 'gen-z-casual',
-			voice: o.voice || 'nadia',
+			voice: o.voice || (persona && persona.voice) || 'nadia',
+			variant: Number(o.variant) || 1,
 			scenes: scenes,
 			caption: data.caption || '',
 			hashtags: data.hashtags || brand.hashtags || '',
@@ -249,37 +372,85 @@ async function generateUgcScript(input) {
 
 /* ----------------------------- PODCAST SCRIPT ----------------------------- */
 
+const PODCAST_LINES = {
+	opening: [
+		'Halo semuanya, balik lagi bareng kita. Hari ini kita mau ngobrolin {topic}.',
+		'Oke, topik kita kali ini {topic}. Jujur ini lagi sering banget aku denger.',
+		'Selamat datang lagi. Kita bahas {topic} ya, soalnya banyak yang nanya.',
+	],
+	openingReply: [
+		'Iya, dan menurutku ini pas banget dibahas sekarang, karena efeknya kerasa ke keseharian.',
+		'Setuju. Banyak yang penasaran, tapi informasinya sering setengah-setengah.',
+		'Betul, apalagi yang baru mulai, pasti bingung harus mulai dari mana.',
+	],
+	facts: [
+		'Satu hal yang sering disalahpahami soal {topic}: hasilnya jarang instan.',
+		'Yang bikin aku kaget, ternyata banyak orang berhenti justru di tahap awal.',
+		'Kalau dilihat dari pengalaman banyak orang, kuncinya ada di kebiasaan kecil.',
+		'Faktanya, yang paling berpengaruh itu bukan alatnya, tapi cara kita konsisten.',
+	],
+	experience: [
+		'Aku pernah salah langkah waktu pertama coba, terlalu semangat di awal terus capek sendiri.',
+		'Dulu aku kira harus sempurna dari awal. Ternyata malah bikin gak jalan-jalan.',
+		'Pengalamanku, begitu targetnya dibuat kecil, justru lebih gampang dijalanin.',
+		'Aku sempat bandingin diri sama orang lain, dan itu bikin semangat turun.',
+	],
+	tips: [
+		'Kalau mau mulai, ambil satu langkah paling kecil dulu, misalnya lima belas menit sehari.',
+		'Tips dari aku: catat progresnya, biar kelihatan perubahannya walau sedikit.',
+		'Coba cari teman atau komunitas, biar ada yang ngingetin dan saling dukung.',
+		'Jangan lupa evaluasi tiap minggu. Yang gak jalan, ganti caranya, bukan tujuannya.',
+	],
+	closing: [
+		'Jadi kesimpulannya soal {topic}: mulai kecil, konsisten, lalu perbesar pelan-pelan.',
+		'Intinya, {topic} itu perjalanan. Gak apa-apa pelan, asal gak berhenti.',
+		'Oke, itu obrolan kita soal {topic} hari ini. Semoga ada yang bisa langsung dicoba.',
+	],
+	closingReply: [
+		'Setuju. Buat kamu yang dengar, tulis di komentar langkah pertama yang mau kamu coba ya.',
+		'Makasih udah dengerin sampai akhir. Sampai jumpa di episode berikutnya!',
+		'Jangan lupa share ke teman yang butuh. Sampai ketemu lagi!',
+	],
+	reactions: ['Wah, bener juga.', 'Hmm, menarik.', 'Nah, ini penting.', 'Iya, aku relate banget.', 'Oke, masuk akal.', 'Setuju banget.'],
+}
+
 function localPodcastScript(input) {
 	const o = input || {}
-	const topic = o.topic || 'topik hari ini'
+	const topic = String(o.topic || 'topik hari ini').trim() || 'topik hari ini'
 	const hosts = (o.hosts && o.hosts.length ? o.hosts : [{ name: 'Host A', voice: 'host-a' }, { name: 'Host B', voice: 'host-b' }]).slice(0, 4)
 	const minutes = Math.max(1, Math.min(Number(o.minutes) || 5, 60))
-	const turns = Math.max(4, Math.round(minutes * 4))
+	const turns = Math.max(6, Math.round(minutes * 5))
+	const seed = hashString(topic) + (Number(o.seed) || 0)
 	const outline = [
 		'Pembukaan dan kenapa ' + topic + ' penting sekarang',
-		'Fakta atau data yang bikin kaget soal ' + topic,
+		'Fakta yang sering disalahpahami soal ' + topic,
 		'Pengalaman pribadi dan kesalahan umum',
 		'Cara praktis yang bisa langsung dicoba',
 		'Kesimpulan dan ajakan diskusi',
 	]
-	const templates = [
-		'Oke, hari ini kita ngobrolin {topic}. Menurut kamu kenapa ini rame dibahas?',
-		'Kalau aku lihat, {topic} itu menarik karena efeknya langsung kerasa di keseharian.',
-		'Ada satu hal soal {topic} yang sering disalahpahami orang.',
-		'Aku pernah salah langkah waktu pertama coba, dan itu bikin aku belajar banyak.',
-		'Kalau mau mulai, langkah paling gampang itu ambil satu bagian kecil dulu.',
-		'Poin pentingnya jangan buru-buru. Konsistensi lebih penting daripada cepat.',
-		'Jadi kesimpulannya soal {topic}: mulai kecil, ukur hasilnya, lalu perbesar.',
-		'Setuju. Buat kamu yang dengar, coba satu langkah dari obrolan ini hari ini.',
-	]
+	const used = {}
+	const take = function (kind, i) {
+		const list = PODCAST_LINES[kind]
+		used[kind] = used[kind] || 0
+		const line = list[(seed + i + used[kind]) % list.length]
+		used[kind] += 1
+		return fill(line, { topic: topic })
+	}
+	const bodyKinds = ['facts', 'experience', 'tips']
 	const segments = []
 	for (let i = 0; i < turns; i += 1) {
+		let text
+		if (i === 0) text = take('opening', i)
+		else if (i === 1) text = take('openingReply', i)
+		else if (i === turns - 2) text = take('closing', i)
+		else if (i === turns - 1) text = take('closingReply', i)
+		else {
+			const phase = bodyKinds[Math.min(bodyKinds.length - 1, Math.floor(((i - 2) / Math.max(1, turns - 4)) * bodyKinds.length))]
+			text = take(phase, i)
+			if (i % 3 === 0) text = pickIndex(PODCAST_LINES.reactions, seed + i) + ' ' + text
+		}
 		const host = hosts[i % hosts.length]
-		segments.push({
-			speaker: host.name,
-			voice: host.voice || (i % 2 === 0 ? 'host-a' : 'host-b'),
-			text: fill(pickIndex(templates, i), { topic: topic }),
-		})
+		segments.push({ speaker: host.name, voice: host.voice || (i % 2 === 0 ? 'host-a' : 'host-b'), text: text })
 	}
 	return {
 		source: 'local',
@@ -310,7 +481,9 @@ async function generatePodcastScript(input) {
 		'Catatan tambahan: ' + (o.notes || '-')
 	try {
 		const data = await chatJson(system, user)
-		const segments = (data.segments || []).map(function (segment, i) {
+		const segments = (Array.isArray(data.segments) ? data.segments : []).filter(function (segment) {
+			return segment && String(segment.text || '').trim()
+		}).map(function (segment, i) {
 			const host = hosts[i % hosts.length]
 			return {
 				speaker: segment.speaker || host.name,
@@ -382,6 +555,7 @@ module.exports = {
 	PERSONAS: PERSONAS,
 	MOTIONS: MOTIONS,
 	isRemote: isRemote,
+	testConnection: testConnection,
 	generateUgcScript: generateUgcScript,
 	localUgcScript: localUgcScript,
 	generatePodcastScript: generatePodcastScript,
@@ -389,4 +563,6 @@ module.exports = {
 	videoPromptFor: videoPromptFor,
 	imagePromptFor: imagePromptFor,
 	captionFor: captionFor,
+	altHook: altHook,
+	shortText: shortText,
 }

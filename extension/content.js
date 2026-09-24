@@ -1,25 +1,58 @@
 ;(function () {
   'use strict'
-  console.log('[UGC Flow Connector] Initializing on flow.google.com...')
-  let activeData = null
-  let isMinimized = false
+  // UGC Flow Connector - panel bantu di Google Flow (flow.google.com).
+  // Mengambil skrip scene aktif dari UGC Flow Studio (server lokal) lalu
+  // memasukkan prompt ke kotak prompt Flow dengan satu klik.
+  var DEFAULT_SERVER = 'http://localhost:8787'
+  var POLL_MS = 5000
+
+  var serverBase = DEFAULT_SERVER
+  var lastSignature = ''
+  var isMinimized = false
+
+  function loadServerBase(done) {
+    try {
+      if (window.chrome && chrome.storage && chrome.storage.local) {
+        chrome.storage.local.get({ serverUrl: DEFAULT_SERVER }, function (items) {
+          serverBase = normalizeBase(items && items.serverUrl)
+          done()
+        })
+        return
+      }
+    } catch (err) {
+      // storage tidak tersedia, pakai default
+    }
+    done()
+  }
+
+  function normalizeBase(value) {
+    var text = String(value || '').trim().replace(/\/+$/, '')
+    return /^https?:\/\/[^\s]+$/i.test(text) ? text : DEFAULT_SERVER
+  }
+
+  function esc(s) {
+    return String(s === undefined || s === null ? '' : s).replace(/[&<>"']/g, function (m) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]
+    })
+  }
 
   function createUI() {
     if (document.getElementById('ugc-flow-panel')) return
 
-    const panel = document.createElement('div')
+    var panel = document.createElement('div')
     panel.id = 'ugc-flow-panel'
-    panel.innerHTML = '<div id="ugc-flow-header">' +
+    panel.innerHTML =
+      '<div id="ugc-flow-header">' +
       '<div id="ugc-flow-title">' +
-        '<span class="ugc-flow-dot" id="ugc-dot"></span>' +
-        '<span>UGC Studio Assistant</span>' +
+      '<span class="ugc-flow-dot" id="ugc-dot"></span>' +
+      '<span>UGC Studio Assistant</span>' +
       '</div>' +
-      '<button id="ugc-btn-min" style="background:none;border:none;color:#A0A5B5;cursor:pointer;font-size:16px;">—</button>' +
-    '</div>' +
-    '<div id="ugc-flow-body">' +
+      '<button id="ugc-btn-min" type="button" style="background:none;border:none;color:#A0A5B5;cursor:pointer;font-size:16px;">—</button>' +
+      '</div>' +
+      '<div id="ugc-flow-body">' +
       '<div id="ugc-status" style="font-size:12px;color:#A0A5B5;">Menghubungkan ke UGC Studio...</div>' +
       '<div id="ugc-scenes-container"></div>' +
-    '</div>'
+      '</div>'
     document.body.appendChild(panel)
 
     document.getElementById('ugc-flow-header').addEventListener('click', function (e) {
@@ -31,84 +64,140 @@
       }
     })
 
-    fetchData()
-    setInterval(fetchData, 5000)
+    loadServerBase(function () {
+      fetchData()
+      setInterval(function () {
+        if (!document.hidden) fetchData()
+      }, POLL_MS)
+    })
   }
 
-  async function fetchData() {
-    try {
-      const res = await fetch('http://localhost:8787/api/extension/active-scenes')
+  function fetchJson(base) {
+    return fetch(base + '/api/extension/active-scenes', { cache: 'no-store' }).then(function (res) {
       if (!res.ok) throw new Error('HTTP ' + res.status)
-      const data = await res.json()
-      activeData = data
-      renderScenes(data)
-      const dot = document.getElementById('ugc-dot')
-      if (dot) dot.className = 'ugc-flow-dot'
-    } catch (err) {
-      const dot = document.getElementById('ugc-dot')
-      if (dot) dot.className = 'ugc-flow-dot offline'
-      const status = document.getElementById('ugc-status')
-      if (status) status.innerHTML = '<span style="color:#E86A5E">UGC Studio offline</span>. Pastikan server aktif di localhost:8787.'
+      return res.json()
+    })
+  }
+
+  function fetchData() {
+    fetchJson(serverBase)
+      .catch(function (err) {
+        // localhost kadang tidak ter-resolve ke IPv4, coba 127.0.0.1
+        if (serverBase.indexOf('//localhost') === -1) throw err
+        var alt = serverBase.replace('//localhost', '//127.0.0.1')
+        return fetchJson(alt).then(function (data) {
+          serverBase = alt
+          return data
+        })
+      })
+      .then(function (data) {
+        var dot = document.getElementById('ugc-dot')
+        if (dot) dot.className = 'ugc-flow-dot'
+        var signature = JSON.stringify([data && data.product, data && data.updatedAt, data && data.scenes])
+        if (signature === lastSignature) return
+        lastSignature = signature
+        renderScenes(data)
+      })
+      .catch(function () {
+        lastSignature = ''
+        var dot = document.getElementById('ugc-dot')
+        if (dot) dot.className = 'ugc-flow-dot offline'
+        var status = document.getElementById('ugc-status')
+        if (status) {
+          status.innerHTML =
+            '<span style="color:#E86A5E">UGC Studio offline</span>. Pastikan server aktif di ' +
+            esc(serverBase) +
+            ' (jalankan KLIK-DISINI-UNTUK-MULAI.bat).'
+        }
+        var container = document.getElementById('ugc-scenes-container')
+        if (container) container.innerHTML = ''
+      })
+  }
+
+  function sceneByIndex(data, idx) {
+    for (var i = 0; i < data.scenes.length; i++) {
+      if (Number(data.scenes[i].index) === idx) return data.scenes[i]
     }
+    return null
   }
 
   function renderScenes(data) {
-    const container = document.getElementById('ugc-scenes-container')
-    const status = document.getElementById('ugc-status')
+    var container = document.getElementById('ugc-scenes-container')
+    var status = document.getElementById('ugc-status')
     if (!container) return
 
-    if (!data || !data.scenes || !data.scenes.length) {
+    if (!data || !Array.isArray(data.scenes) || !data.scenes.length) {
       if (status) status.textContent = 'Belum ada skrip. Buat skrip dulu di UGC Studio!'
       container.innerHTML = ''
       return
     }
 
-    if (status) status.innerHTML = 'Produk: <strong style="color:#5E9FE8">' + (data.product || 'Produk') + '</strong> (' + data.scenes.length + ' scene)'
+    if (status) {
+      status.innerHTML =
+        'Produk: <strong style="color:#5E9FE8">' + esc(data.product || 'Produk') + '</strong> (' + data.scenes.length + ' scene)'
+    }
 
-    let html = ''
-    data.scenes.forEach(function(scene) {
-      html += '<div class="ugc-scene-card">' +
+    var html = ''
+    data.scenes.forEach(function (scene, position) {
+      var idx = Number(scene.index) || position + 1
+      scene.index = idx
+      html +=
+        '<div class="ugc-scene-card">' +
         '<div class="ugc-scene-head">' +
-          '<span>SCENE ' + scene.index + ' (' + (scene.duration || 5) + 's)</span>' +
-          '<span>' + (scene.motion || 'cinematic') + '</span>' +
+        '<span>SCENE ' + esc(idx) + ' (' + esc(scene.duration || 5) + 's)</span>' +
+        '<span>' + esc(scene.motion || 'cinematic') + '</span>' +
         '</div>' +
         '<div class="ugc-scene-prompt" title="' + esc(scene.prompt) + '">' + esc(scene.prompt) + '</div>' +
         '<div class="ugc-scene-actions">' +
-          '<button class="ugc-btn ugc-btn-primary" data-inject="' + scene.index + '">⚡ Masukkan & Generate</button>' +
-          '<button class="ugc-btn ugc-btn-ghost" data-copy="' + scene.index + '" title="Salin Prompt">📋 Salin</button>' +
+        '<button type="button" class="ugc-btn ugc-btn-primary" data-inject="' + esc(idx) + '">⚡ Masukkan &amp; Generate</button>' +
+        '<button type="button" class="ugc-btn ugc-btn-ghost" data-copy="' + esc(idx) + '" title="Salin Prompt">📋 Salin</button>' +
         '</div>' +
-      '</div>'
+        '</div>'
     })
     container.innerHTML = html
 
-    container.querySelectorAll('[data-inject]').forEach(function(btn) {
+    container.querySelectorAll('[data-inject]').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        const idx = Number(btn.getAttribute('data-inject'))
-        const scene = data.scenes.find(function(s) { return s.index === idx })
-        if (scene) injectPromptAndGenerate(scene.prompt, idx)
+        var idx = Number(btn.getAttribute('data-inject'))
+        var scene = sceneByIndex(data, idx)
+        if (scene) injectPromptAndGenerate(scene.prompt || '', idx)
       })
     })
 
-    container.querySelectorAll('[data-copy]').forEach(function(btn) {
+    container.querySelectorAll('[data-copy]').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        const idx = Number(btn.getAttribute('data-copy'))
-        const scene = data.scenes.find(function(s) { return s.index === idx })
-        if (scene) {
-          navigator.clipboard.writeText(scene.prompt)
-          showToast('Prompt Scene ' + idx + ' berhasil disalin!')
-        }
+        var idx = Number(btn.getAttribute('data-copy'))
+        var scene = sceneByIndex(data, idx)
+        if (!scene) return
+        copyText(scene.prompt || '').then(
+          function () {
+            showToast('Prompt Scene ' + idx + ' berhasil disalin!')
+          },
+          function () {
+            showToast('Gagal menyalin otomatis. Blok teks prompt lalu tekan Ctrl + C.')
+          },
+        )
       })
     })
   }
 
-  function esc(s) {
-    return String(s || '').replace(/[&<>"']/g, function (m) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]
-    })
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text)
+    return Promise.reject(new Error('clipboard tidak tersedia'))
+  }
+
+  function visible(el) {
+    return Boolean(el && (el.offsetParent !== null || el.getClientRects().length))
+  }
+
+  function outsidePanel(el) {
+    return el && el.id !== 'ugc-flow-panel' && !el.closest('#ugc-flow-panel')
   }
 
   function findPromptInput() {
-    const candidates = [
+    var active = document.activeElement
+    if (active && outsidePanel(active) && (active.tagName === 'TEXTAREA' || active.isContentEditable) && visible(active)) return active
+    var candidates = [
       'textarea[placeholder*="prompt" i]',
       'textarea[aria-label*="prompt" i]',
       'textarea[placeholder*="describe" i]',
@@ -117,84 +206,127 @@
       'div[contenteditable="true"][role="textbox"]',
       'div[contenteditable="true"]',
       'input[type="text"][placeholder*="prompt" i]',
-      'input[type="text"]'
     ]
-    for (let i = 0; i < candidates.length; i++) {
-      const els = document.querySelectorAll(candidates[i])
-      for (let j = 0; j < els.length; j++) {
-        const el = els[j]
-        if (el && el.id !== 'ugc-flow-panel' && !el.closest('#ugc-flow-panel') && el.offsetParent !== null) return el
+    for (var i = 0; i < candidates.length; i++) {
+      var els = document.querySelectorAll(candidates[i])
+      for (var j = 0; j < els.length; j++) {
+        var el = els[j]
+        if (outsidePanel(el) && visible(el) && !el.disabled && !el.readOnly) return el
       }
     }
     return null
   }
 
-  function findGenerateButton() {
-    const list = document.querySelectorAll('button, [role="button"]')
-    for (let i = 0; i < list.length; i++) {
-      const btn = list[i]
-      if (btn.closest('#ugc-flow-panel')) continue
-      const txt = (btn.innerText || btn.getAttribute('aria-label') || btn.getAttribute('title') || '').toLowerCase()
-      if (txt.includes('generate') || txt.includes('buat') || txt.includes('create') || txt.includes('run') || txt.includes('submit')) {
-        if (btn.offsetParent !== null && !btn.disabled) return btn
+  var GENERATE_WORDS = /\b(generate|buat|create|kirim|send|submit)\b|arrow_forward/i
+  var AVOID_WORDS = /\b(delete|hapus|remove|close|tutup|cancel|batal|settings|setelan|menu|more|lainnya|upload|unggah|add|tambah)\b/i
+
+  // Cari tombol Generate HANYA di sekitar kotak prompt (bukan seluruh halaman)
+  function findGenerateButton(input) {
+    var scope = input
+    for (var level = 0; level < 6 && scope; level++) {
+      scope = scope.parentElement
+      if (!scope) break
+      var buttons = scope.querySelectorAll('button, [role="button"]')
+      var usable = []
+      for (var i = 0; i < buttons.length; i++) {
+        var btn = buttons[i]
+        if (!outsidePanel(btn) || !visible(btn) || btn.disabled || btn.getAttribute('aria-disabled') === 'true') continue
+        usable.push(btn)
+      }
+      for (var k = 0; k < usable.length; k++) {
+        var label = [usable[k].innerText, usable[k].getAttribute('aria-label'), usable[k].getAttribute('title')].join(' ')
+        if (GENERATE_WORDS.test(label) && !AVOID_WORDS.test(label)) return usable[k]
+      }
+      if (usable.length && level >= 2) {
+        // Tombol kirim di Flow biasanya tombol ikon paling akhir di dekat kotak prompt
+        var last = usable[usable.length - 1]
+        var lastLabel = [last.innerText, last.getAttribute('aria-label'), last.getAttribute('title')].join(' ')
+        if (!AVOID_WORDS.test(lastLabel) && last.querySelector('svg, i, span')) return last
       }
     }
-    // Also look for send arrow icons near textarea
-    const svgs = document.querySelectorAll('button svg, [role="button"] svg')
-    for (let j = 0; j < svgs.length; j++) {
-      const p = svgs[j].closest('button, [role="button"]')
-      if (p && !p.closest('#ugc-flow-panel') && p.offsetParent !== null && !p.disabled) return p
-    }
     return null
+  }
+
+  function setPrompt(input, promptText) {
+    input.focus()
+    if (input.tagName === 'TEXTAREA' || input.tagName === 'INPUT') {
+      var proto = input.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype
+      var descriptor = Object.getOwnPropertyDescriptor(proto, 'value')
+      if (descriptor && descriptor.set) descriptor.set.call(input, promptText)
+      else input.value = promptText
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      input.dispatchEvent(new Event('change', { bubbles: true }))
+      return true
+    }
+    if (input.isContentEditable) {
+      // execCommand memicu event input yang dipahami editor React/Lexical/ProseMirror
+      var ok = false
+      try {
+        document.execCommand('selectAll', false, null)
+        ok = document.execCommand('insertText', false, promptText)
+      } catch (err) {
+        ok = false
+      }
+      if (!ok || (input.innerText || '').trim() !== promptText.trim()) {
+        input.textContent = promptText
+        input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: promptText }))
+      }
+      return true
+    }
+    return false
   }
 
   function injectPromptAndGenerate(promptText, sceneIdx) {
-    const input = findPromptInput()
-    if (!input) {
-      navigator.clipboard.writeText(promptText)
-      alert('Prompt Scene ' + sceneIdx + ' sudah DISALIN ke clipboard!\n\nSilakan klik kotak prompt di Google Flow lalu tekan Ctrl + V, kemudian klik Generate.')
+    var input = findPromptInput()
+    if (!input || !setPrompt(input, promptText)) {
+      copyText(promptText).then(
+        function () {
+          alert('Prompt Scene ' + sceneIdx + ' sudah DISALIN ke clipboard!\n\nKlik kotak prompt di Google Flow, tekan Ctrl + V, lalu klik Generate.')
+        },
+        function () {
+          alert('Kotak prompt Flow tidak ditemukan dan clipboard ditolak browser.\n\nSalin prompt Scene ' + sceneIdx + ' secara manual dari panel.')
+        },
+      )
       return
-    }
-
-    input.focus()
-    if (input.tagName === 'TEXTAREA' || input.tagName === 'INPUT') {
-      const proto = input.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype
-      const descriptor = Object.getOwnPropertyDescriptor(proto, 'value')
-      if (descriptor && descriptor.set) {
-        descriptor.set.call(input, promptText)
-      } else {
-        input.value = promptText
-      }
-      input.dispatchEvent(new Event('input', { bubbles: true }))
-      input.dispatchEvent(new Event('change', { bubbles: true }))
-    } else if (input.isContentEditable) {
-      input.focus()
-      input.innerText = promptText
-      input.dispatchEvent(new Event('input', { bubbles: true }))
-      input.dispatchEvent(new Event('change', { bubbles: true }))
     }
 
     showToast('Prompt Scene ' + sceneIdx + ' dimasukkan!')
 
     setTimeout(function () {
-      const genBtn = findGenerateButton()
+      var genBtn = findGenerateButton(input)
       if (genBtn) {
         genBtn.click()
         showToast('🚀 Generate Scene ' + sceneIdx + ' dimulai!')
       } else {
         showToast('Prompt dimasukkan. Klik tombol Generate di Flow!')
       }
-    }, 600)
+    }, 700)
   }
 
   function showToast(msg) {
-    const existing = document.querySelector('.ugc-toast')
+    var existing = document.querySelector('.ugc-toast')
     if (existing) existing.remove()
-    const toast = document.createElement('div')
+    var toast = document.createElement('div')
     toast.className = 'ugc-toast'
     toast.textContent = msg
     document.body.appendChild(toast)
-    setTimeout(function () { toast.remove() }, 3500)
+    setTimeout(function () {
+      toast.remove()
+    }, 3500)
+  }
+
+  try {
+    if (window.chrome && chrome.storage && chrome.storage.onChanged) {
+      chrome.storage.onChanged.addListener(function (changes) {
+        if (changes.serverUrl) {
+          serverBase = normalizeBase(changes.serverUrl.newValue)
+          lastSignature = ''
+          fetchData()
+        }
+      })
+    }
+  } catch (err) {
+    // abaikan
   }
 
   if (document.readyState === 'loading') {

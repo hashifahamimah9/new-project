@@ -57,6 +57,15 @@ function assetFile(assetId) {
 	return null
 }
 
+/** File lokal dari payload hanya boleh di dalam folder storage aplikasi. */
+function storageFile(file) {
+	if (!file || typeof file !== 'string') return null
+	const resolved = path.resolve(file)
+	const rel = path.relative(PATHS.storage, resolved)
+	if (!rel || rel.indexOf('..') === 0 || path.isAbsolute(rel)) return null
+	return fs.existsSync(resolved) ? resolved : null
+}
+
 function pickAssets(payload) {
 	const ids = Array.isArray(payload.assetIds) ? payload.assetIds : []
 	const files = []
@@ -64,7 +73,8 @@ function pickAssets(payload) {
 		const file = assetFile(id)
 		if (file) files.push(file)
 	})
-	if (payload.imageFile && fs.existsSync(payload.imageFile)) files.push(payload.imageFile)
+	const extra = storageFile(payload.imageFile)
+	if (extra) files.push(extra)
 	return files
 }
 
@@ -104,9 +114,19 @@ async function fitClip(input, out, o) {
 	try {
 		info = await ff.mediaInfo(input)
 	} catch (err) {}
-	const offset = (Number(o.offset) || 0) % Math.max(1, info.duration || 10)
+	const len = Number(info.duration) || 0
+	let offset = Math.max(0, Number(o.offset) || 0)
+	if (len > 0) {
+		offset = offset % len
+		// Hindari scene yang cuma berisi frame beku di ujung klip.
+		if (len <= Number(o.duration)) offset = 0
+		else if (offset + Number(o.duration) > len) offset = Math.max(0, len - Number(o.duration))
+	}
+	// Clip yang lebih pendek dari narasi diperpanjang dengan frame terakhir (bukan dipotong).
 	const vf =
-		'tpad=stop_mode=clone:stop_duration=4,scale=' +
+		'tpad=stop_mode=clone:stop_duration=' +
+		Math.ceil(Number(o.duration) + 1) +
+		',scale=' +
 		o.width +
 		':' +
 		o.height +
@@ -121,7 +141,9 @@ async function fitClip(input, out, o) {
 	if (offset > 0) args.push('-ss', String(offset))
 	args.push('-i', input)
 	if (!info.hasAudio) args.push('-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000')
-	args.push('-vf', vf, '-map', '0:v:0', '-map', info.hasAudio ? '0:a:0' : '1:a', '-t', String(o.duration))
+	args.push('-vf', vf, '-map', '0:v:0', '-map', info.hasAudio ? '0:a:0' : '1:a')
+	if (info.hasAudio) args.push('-af', 'aresample=48000,apad')
+	args.push('-t', String(o.duration), '-ar', '48000', '-ac', '2')
 	await ff.run(args.concat(ff.encodeArgs({ preset: o.preset, crf: o.crf, fps: o.fps }), [out]))
 	return out
 }
@@ -129,6 +151,90 @@ async function fitClip(input, out, o) {
 async function padAudio(input, out, duration) {
 	await ff.run(['-i', input, '-af', 'apad', '-t', String(duration), '-ar', '48000', '-ac', '2', out])
 	return out
+}
+
+/** Watermark: isian form > Brand Kit > setting render. Isi "none" / "-" untuk tanpa watermark. */
+function resolveWatermark(p, render, brand) {
+	const own = String((p && p.watermark) || '').trim()
+	if (own === '-' || own.toLowerCase() === 'none') return ''
+	if (own) return own
+	const b = brand || {}
+	const r = render || {}
+	return String(b.watermarkText || (r.watermark ? r.watermarkText : '') || '').trim()
+}
+
+/** Catat peringatan (misal TTS fallback) sekali saja per job. */
+function warnOnce(ctx) {
+	const seen = new Set()
+	return function (message) {
+		if (!message || seen.has(message)) return
+		seen.add(message)
+		ctx.log('Peringatan: ' + message)
+	}
+}
+
+function rotate(list, n) {
+	if (!Array.isArray(list) || list.length < 2) return list || []
+	const k = ((n % list.length) + list.length) % list.length
+	return list.slice(k).concat(list.slice(0, k))
+}
+
+/** Pindahkan file (fallback copy kalau beda drive). */
+function moveFile(from, to) {
+	util.ensureDir(path.dirname(to))
+	try {
+		fs.renameSync(from, to)
+	} catch (err) {
+		fs.copyFileSync(from, to)
+		try {
+			fs.unlinkSync(from)
+		} catch (e) {}
+	}
+	return to
+}
+
+/** Skrip dari UI / ekstensi: terima juga field text / voiceover / vo, scene rusak dibuang. */
+function normalizeProvidedScript(script) {
+	if (!script || !Array.isArray(script.scenes)) return null
+	const scenes = script.scenes
+		.filter(function (scene) {
+			return scene && typeof scene === 'object'
+		})
+		.map(function (scene) {
+			const narration = String(scene.narration || scene.voiceover || scene.vo || scene.text || scene.dialogue || scene.line || '').trim()
+			return Object.assign({}, scene, { narration: narration, onScreenText: scene.onScreenText || llm.shortText(narration, 40) })
+		})
+	const spoken = scenes.some(function (scene) {
+		return scene.narration
+	})
+	return spoken ? Object.assign({}, script, { scenes: scenes, source: script.source || 'manual' }) : null
+}
+
+/** Variasi ke-N: skrip baru (kalau skrip tidak diedit manual) atau hook berbeda + gerak kamera diputar. */
+async function scriptForVariant(p, variant) {
+	const provided = normalizeProvidedScript(p.script)
+	if (!provided) {
+		const generated = await llm.generateUgcScript(Object.assign({}, p, { variant: variant }))
+		if (p.script && Array.isArray(p.script.scenes) && p.script.scenes.length && !generated.warning) {
+			generated.warning = 'Skrip yang dikirim tidak punya narasi, dibuatkan skrip otomatis'
+		}
+		return generated
+	}
+	const script = JSON.parse(JSON.stringify(provided))
+	if (variant > 1) {
+		const hook = llm.altHook(Object.assign({}, p, { angle: script.angle || p.angle }), variant)
+		if (hook && script.scenes[0]) {
+			script.scenes[0].narration = hook
+			script.scenes[0].onScreenText = llm.shortText(hook, 46)
+			script.hook = hook
+		}
+		script.scenes.forEach(function (scene, i) {
+			const idx = llm.MOTIONS.indexOf(scene.motion)
+			scene.motion = llm.MOTIONS[((idx === -1 ? i : idx) + variant - 1) % llm.MOTIONS.length]
+		})
+		script.title = (script.title || p.product || 'Video UGC') + ' (variasi ' + variant + ')'
+	}
+	return script
 }
 
 /* --------------------------------- UGC ----------------------------------- */
@@ -146,12 +252,28 @@ async function renderUgc(ctx) {
 	const mode = p.mode || 'flow-video'
 	const lane = p.lane || (settings.flow || {}).defaultLane || 'low'
 	const dir = workDir('work', ctx.jobId)
-	const images = pickAssets(p)
+	try {
+		return await renderUgcInner(ctx, { p, settings, render, aspect, resolution, fps, dims, preset, crf, mode, lane, dir })
+	} finally {
+		cleanup(dir)
+	}
+}
+
+async function renderUgcInner(ctx, env) {
+	const { p, render, aspect, resolution, fps, dims, preset, crf, mode, lane, dir } = env
+	const variant = Math.max(1, Number(p.variant) || 1)
+	const warn = warnOnce(ctx)
+	const images = rotate(pickAssets(p), variant - 1)
 
 	ctx.progress(4, 'Menyiapkan skrip')
-	const script = p.script && p.script.scenes && p.script.scenes.length ? p.script : await llm.generateUgcScript(p)
-	if (script.warning) ctx.log(script.warning)
-	ctx.log('Skrip siap: ' + script.scenes.length + ' scene (sumber: ' + script.source + ')')
+	const script = await scriptForVariant(p, variant)
+	if (script.warning) warn(script.warning)
+	ctx.log('Skrip siap: ' + script.scenes.length + ' scene (sumber: ' + script.source + (variant > 1 ? ', variasi ' + variant : '') + ')')
+	if (p.motion && p.motion !== 'auto') {
+		script.scenes.forEach(function (scene) {
+			scene.motion = p.motion
+		})
+	}
 	ctx.throwIfCanceled()
 
 	const voice = p.voice || script.voice || 'nadia'
@@ -167,11 +289,16 @@ async function renderUgc(ctx) {
 			denoise: true,
 			room: Number(p.room) || 0,
 			outDir: dir,
+			onWarning: warn,
 			onProgress: function (i, total) {
 				ctx.progress(10 + Math.round((i / Math.max(1, total)) * 22), 'Voice over ' + (i + 1) + '/' + total)
 			},
 		},
 	)
+	const spokenVoice = voices.find(function (item) {
+		return item && !item.silent
+	})
+	if (spokenVoice && spokenVoice.provider) ctx.log('Suara: ' + spokenVoice.provider + (spokenVoice.voiceId && spokenVoice.voiceId !== 'google' ? ' (' + spokenVoice.voiceId + ')' : ''))
 	ctx.throwIfCanceled()
 
 	const durations = script.scenes.map(function (scene, i) {
@@ -256,7 +383,9 @@ async function renderUgc(ctx) {
 				crf: crf,
 			})
 		} else if (refImage) {
-			const startOffset = durations.slice(0, i).reduce(function (a, b) { return a + b }, 0)
+			// Satu klip dipakai beberapa scene -> lanjutkan dari detik terakhir; tiap klip sendiri mulai dari 0.
+			let startOffset = 0
+			for (let j = 0; j < i; j += 1) if (j % images.length === i % images.length) startOffset += durations[j]
 			await fitClip(refImage, clipOut, { width: dims.width, height: dims.height, fps: fps, duration: duration, offset: startOffset, preset: preset, crf: crf })
 		} else {
 			await ff.textCardClip({ out: clipOut, duration: duration, width: dims.width, height: dims.height, fps: fps, title: scene.onScreenText, subtitle: scene.visual, preset: preset, crf: crf })
@@ -292,7 +421,7 @@ async function renderUgc(ctx) {
 	}
 
 	const music = await musicBed(p.musicMood || p.music, totalDuration)
-	const brand = store.brand()
+	const brand = store.brand() || {}
 	ctx.progress(86, 'Render final')
 	const finalFile = path.join(util.ensureDir(path.join(PATHS.renders, 'final')), 'ugc_' + util.uid('', 8) + MP4)
 	await ff.finalMix({
@@ -301,7 +430,9 @@ async function renderUgc(ctx) {
 		music: music,
 		srt: subtitleStyle !== 'none' ? srtFile : null,
 		subtitleStyle: subtitleStyle,
-		watermarkText: p.watermark || (render.watermark ? render.watermarkText || brand.watermarkText : ''),
+		width: dims.width,
+		height: dims.height,
+		watermarkText: resolveWatermark(p, render, brand),
 		musicVolume: p.musicVolume === undefined ? render.musicVolume : p.musicVolume,
 		voiceVolume: render.voiceVolume === undefined ? 1.4 : render.voiceVolume,
 		fps: fps,
@@ -358,6 +489,7 @@ async function renderUgc(ctx) {
 			lane: lane,
 			mode: mode,
 			simulated: simulated,
+			variant: variant,
 			scriptId: scriptDoc.id,
 			jobId: ctx.jobId,
 		},
@@ -365,7 +497,6 @@ async function renderUgc(ctx) {
 	)
 	registerAsset({ file: finalFile, kind: 'video', name: util.safeFileName((script.title || 'ugc') + MP4), source: 'ugc', meta: { videoId: video.id } })
 	store.addUsage(util.dayKey(new Date(), (store.settings().workspace || {}).timezone), { renderSeconds: Math.round(info.duration || totalDuration) })
-	cleanup(dir)
 	events.emit('library:updated', { type: 'video', id: video.id })
 	ctx.progress(100, 'Selesai')
 	return { videoId: video.id, url: video.url, title: video.title, duration: video.duration, thumbUrl: video.thumbUrl, caption: caption.caption, hashtags: caption.hashtags, scriptId: scriptDoc.id, simulated: simulated }
@@ -385,11 +516,41 @@ async function renderPodcast(ctx) {
 	const crf = p.crf === undefined ? 23 : p.crf
 	const gap = p.gap === undefined ? 0.35 : Number(p.gap)
 	const dir = workDir('pod', ctx.jobId)
+	try {
+		return await renderPodcastInner(ctx, { p, render, aspect, resolution, dims, fps, preset, crf, gap, dir })
+	} finally {
+		cleanup(dir)
+	}
+}
+
+async function renderPodcastInner(ctx, env) {
+	const { p, render, aspect, dims, fps, preset, crf, gap, dir } = env
+	const warn = warnOnce(ctx)
 
 	ctx.progress(5, 'Menyiapkan skrip')
 	const script = p.script && p.script.segments && p.script.segments.length ? p.script : await llm.generatePodcastScript(p)
-	if (script.warning) ctx.log(script.warning)
+	if (script.warning) warn(script.warning)
 	ctx.log('Skrip podcast: ' + script.segments.length + ' dialog (sumber: ' + script.source + ')')
+	const hostVoices = Array.from(
+		new Set(
+			script.segments.map(function (segment) {
+				return segment.voice || 'host-a'
+			}),
+		),
+	)
+	if (hostVoices.length > 1) {
+		const resolved = hostVoices.map(function (voice) {
+			return tts.voiceFor(voice)
+		})
+		const distinct = new Set(
+			resolved.map(function (item) {
+				return item.voice
+			}),
+		)
+		if (distinct.size < hostVoices.length && (resolved[0].provider === 'fishaudio' || resolved[0].provider === 'elevenlabs')) {
+			ctx.log('Tip: semua host memakai voice yang sama. Isi "Voice ID Host B" di Settings > Voice (atau FISHAUDIO_VOICE_ID_2 di .env) supaya suara host berbeda.')
+		}
+	}
 	ctx.throwIfCanceled()
 
 	ctx.progress(12, 'Merekam suara host')
@@ -403,6 +564,7 @@ async function renderPodcast(ctx) {
 			denoise: true,
 			room: p.room === undefined ? 0.1 : Number(p.room),
 			outDir: dir,
+			onWarning: warn,
 			onProgress: function (i, total) {
 				ctx.progress(12 + Math.round((i / Math.max(1, total)) * 45), 'Dialog ' + (i + 1) + '/' + total)
 			},
@@ -411,7 +573,7 @@ async function renderPodcast(ctx) {
 	ctx.throwIfCanceled()
 
 	ctx.progress(60, 'Menggabung audio')
-	const audioFile = path.join(util.ensureDir(PATHS.audio), 'podcast_' + util.uid('', 8) + '.wav')
+	const audioFile = path.join(dir, 'podcast_full.wav')
 	await ff.concatAudio({
 		inputs: voices.map(function (v) {
 			return v.file
@@ -435,7 +597,7 @@ async function renderPodcast(ctx) {
 
 	ctx.progress(66, 'Membuat visual')
 	const cover = p.coverAssetId ? assetFile(p.coverAssetId) : null
-	const brand = store.brand()
+	const brand = store.brand() || {}
 	const waveFile = path.join(dir, 'wave' + MP4)
 	await ff.waveformVideo({
 		audio: audioFile,
@@ -463,7 +625,9 @@ async function renderPodcast(ctx) {
 		music: music,
 		srt: subtitleStyle !== 'none' ? srtFile : null,
 		subtitleStyle: subtitleStyle,
-		watermarkText: p.watermark || brand.watermarkText || '',
+		width: dims.width,
+		height: dims.height,
+		watermarkText: resolveWatermark(p, render, brand),
 		musicVolume: p.musicVolume === undefined ? 0.07 : p.musicVolume,
 		voiceVolume: 1,
 		fps: fps,
@@ -475,11 +639,12 @@ async function renderPodcast(ctx) {
 	})
 
 	ctx.progress(95, 'Export MP3')
-	const mp3File = path.join(util.ensureDir(PATHS.audio), 'podcast_' + util.uid('', 8) + '.mp3')
+	let audioOut = path.join(util.ensureDir(PATHS.audio), 'podcast_' + util.uid('', 8) + '.mp3')
 	try {
-		await ff.toMp3({ input: audioFile, out: mp3File, bitrate: '192k' })
+		await ff.toMp3({ input: audioFile, out: audioOut, bitrate: '192k' })
 	} catch (err) {
-		ctx.log('Export MP3 gagal: ' + err.message)
+		ctx.log('Export MP3 gagal (' + err.message + '), simpan sebagai WAV')
+		audioOut = moveFile(audioFile, path.join(util.ensureDir(PATHS.audio), 'podcast_' + util.uid('', 8) + '.wav'))
 	}
 	const thumbFile = path.join(util.ensureDir(PATHS.thumbs), 'thumb_' + util.uid('', 8) + '.jpg')
 	try {
@@ -525,8 +690,8 @@ async function renderPodcast(ctx) {
 		{
 			title: (script.title || 'Podcast') + ' (audio)',
 			type: 'podcast',
-			file: fs.existsSync(mp3File) ? mp3File : audioFile,
-			url: storageUrl(fs.existsSync(mp3File) ? mp3File : audioFile),
+			file: audioOut,
+			url: storageUrl(audioOut),
 			duration: totalDuration,
 			podcastId: podcast.id,
 			jobId: ctx.jobId,
@@ -535,7 +700,6 @@ async function renderPodcast(ctx) {
 	)
 	registerAsset({ file: finalFile, kind: 'video', name: util.safeFileName((script.title || 'podcast') + MP4), source: 'podcast', meta: { videoId: video.id } })
 	store.addUsage(util.dayKey(new Date(), (store.settings().workspace || {}).timezone), { renderSeconds: Math.round(totalDuration) })
-	cleanup(dir)
 	events.emit('library:updated', { type: 'video', id: video.id })
 	ctx.progress(100, 'Selesai')
 	return { videoId: video.id, url: video.url, audioId: audioDoc.id, audioUrl: audioDoc.url, podcastId: podcast.id, duration: totalDuration, title: video.title }
@@ -544,24 +708,34 @@ async function renderPodcast(ctx) {
 /* -------------------------------- VOICE ---------------------------------- */
 
 async function renderVoice(ctx) {
-	const p = ctx.payload || {}
 	const dir = workDir('voice', ctx.jobId)
+	try {
+		return await renderVoiceInner(ctx, dir)
+	} finally {
+		cleanup(dir)
+	}
+}
+
+async function renderVoiceInner(ctx, dir) {
+	const p = ctx.payload || {}
+	const warn = warnOnce(ctx)
 	let result = null
 	let title = ''
 
 	if (p.mode === 'transform') {
-		const input = p.file && fs.existsSync(p.file) ? p.file : assetFile(p.assetId)
+		const input = storageFile(p.file) || assetFile(p.assetId)
 		if (!input) throw new Error('File audio/video tidak ditemukan')
 		ctx.progress(20, 'Memproses suara')
 		result = await tts.transformUpload({
 			input: input,
+			out: path.join(dir, 'natural.wav'),
 			preset: p.naturalPreset || 'podcast-warm',
 			pitch: Number(p.pitch) || 0,
 			speed: Number(p.speed) || 1,
 			room: Number(p.room) || 0,
 			denoise: p.denoise !== false,
 		})
-		title = 'Natural: ' + path.basename(input)
+		title = 'Natural: ' + (p.title ? String(p.title).slice(0, 60) : path.basename(input).replace(/^[a-z0-9]{6}_/i, ''))
 	} else {
 		const text = String(p.text || '').trim()
 		if (!text) throw new Error('Teks kosong')
@@ -573,11 +747,13 @@ async function renderVoice(ctx) {
 				voice: p.voice || 'nadia',
 				naturalPreset: p.naturalPreset,
 				naturalize: true,
-				pitch: p.pitch === undefined ? undefined : Number(p.pitch),
+				pitch: p.pitch === undefined || p.pitch === '' ? undefined : Number(p.pitch),
 				speed: Number(p.speed) || undefined,
 				room: Number(p.room) || 0,
 				denoise: p.denoise !== false,
+				out: path.join(dir, 'voice.wav'),
 			})
+			warn(result.warning)
 		} else {
 			const parts = await tts.synthesizeMany(
 				chunks.map(function (chunk) {
@@ -587,15 +763,18 @@ async function renderVoice(ctx) {
 					voice: p.voice || 'nadia',
 					naturalPreset: p.naturalPreset,
 					naturalize: true,
+					pitch: p.pitch === undefined || p.pitch === '' ? undefined : Number(p.pitch),
+					speed: Number(p.speed) || undefined,
 					denoise: p.denoise !== false,
 					room: Number(p.room) || 0,
 					outDir: dir,
+					onWarning: warn,
 					onProgress: function (i, total) {
 						ctx.progress(15 + Math.round((i / Math.max(1, total)) * 60), 'Bagian ' + (i + 1) + '/' + total)
 					},
 				},
 			)
-			const joined = path.join(util.ensureDir(PATHS.audio), 'voice_' + util.uid('', 8) + '.wav')
+			const joined = path.join(dir, 'voice_joined.wav')
 			await ff.concatAudio({
 				inputs: parts.map(function (part) {
 					return part.file
@@ -605,10 +784,10 @@ async function renderVoice(ctx) {
 			})
 			result = { file: joined, duration: await ff.durationOf(joined) }
 		}
-		title = 'Voice over: ' + text.slice(0, 40)
+		title = 'Voice over: ' + (p.title ? String(p.title).slice(0, 60) : text.slice(0, 40))
 	}
 
-	let finalFile = result.file
+	let finalFile = null
 	if (p.mp3 !== false) {
 		ctx.progress(88, 'Export MP3')
 		const mp3 = path.join(util.ensureDir(PATHS.audio), 'voice_' + util.uid('', 8) + '.mp3')
@@ -616,9 +795,10 @@ async function renderVoice(ctx) {
 			await ff.toMp3({ input: result.file, out: mp3, bitrate: '192k' })
 			finalFile = mp3
 		} catch (err) {
-			ctx.log('Export MP3 gagal: ' + err.message)
+			ctx.log('Export MP3 gagal (' + err.message + '), simpan sebagai WAV')
 		}
 	}
+	if (!finalFile) finalFile = moveFile(result.file, path.join(util.ensureDir(PATHS.audio), (p.mode === 'transform' ? 'natural_' : 'voice_') + util.uid('', 8) + '.wav'))
 
 	const audio = store.insert(
 		'audios',
@@ -636,7 +816,7 @@ async function renderVoice(ctx) {
 		'aud',
 	)
 	registerAsset({ file: finalFile, kind: 'audio', name: util.safeFileName(title + path.extname(finalFile)), source: 'voice', meta: { audioId: audio.id } })
-	cleanup(dir)
+	events.emit('library:updated', { type: 'audio', id: audio.id })
 	ctx.progress(100, 'Selesai')
 	return { audioId: audio.id, url: audio.url, duration: audio.duration, title: title }
 }

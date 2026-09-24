@@ -31,7 +31,14 @@ function parseHeaders(raw) {
 	const fileMatch = /filename\*?=(?:UTF-8''([^;]+)|"([^"]*)")/i.exec(disposition)
 	let filename = null
 	if (fileMatch) {
-		filename = fileMatch[1] ? decodeURIComponent(fileMatch[1]) : fileMatch[2]
+		filename = fileMatch[2]
+		if (fileMatch[1]) {
+			try {
+				filename = decodeURIComponent(fileMatch[1])
+			} catch (err) {
+				filename = fileMatch[1]
+			}
+		}
 	}
 	return {
 		name: nameMatch ? nameMatch[1] : '',

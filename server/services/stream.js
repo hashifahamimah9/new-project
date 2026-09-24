@@ -6,7 +6,7 @@ const fs = require('fs')
 const path = require('path')
 const { spawn } = require('child_process')
 
-const { PATHS } = require('../lib/config')
+const { PATHS, dimensionsFor } = require('../lib/config')
 const store = require('../lib/store')
 const events = require('../lib/events')
 const ff = require('../lib/ffmpeg')
@@ -14,8 +14,38 @@ const util = require('../lib/util')
 
 const procs = new Map()
 const timers = new Map()
+const starting = new Set()
+let shuttingDown = false
 
-const SIZES = { 2160: [3840, 2160], 1080: [1920, 1080], 720: [1280, 720], 480: [854, 480] }
+/** Error karena input/pengaturan user (bukan bug server) -> dikirim ke browser sebagai 4xx. */
+function userError(message, status) {
+	const err = new Error(message)
+	err.status = status || 400
+	return err
+}
+
+/** "4500k" / "6M" / "6000" -> kbps (angka). */
+function kbps(value, fallback) {
+	const text = String(value || '').trim().toLowerCase()
+	const num = parseFloat(text)
+	if (!isFinite(num) || num <= 0) return fallback
+	if (text.endsWith('m')) return Math.round(num * 1000)
+	if (text.endsWith('k')) return Math.round(num)
+	return num > 100000 ? Math.round(num / 1000) : Math.round(num)
+}
+
+function sizeFor(stream) {
+	const dims = dimensionsFor(stream.aspect || '16:9', String(stream.resolution || '1080'))
+	return [dims.width, dims.height]
+}
+
+/** Mode audio live: "source" (audio asli video), "music" (musik loop) atau "silent" (tanpa suara). */
+function audioModeOf(stream) {
+	const value = String((stream && stream.audioMode) || '').trim().toLowerCase()
+	if (value === 'music' || value === 'musik') return 'music'
+	if (value === 'silent' || value === 'none' || value === 'mute' || value === 'muted' || value === 'tanpa suara') return 'silent'
+	return 'source'
+}
 
 function streamsDir() {
 	return util.ensureDir(path.join(PATHS.tmp, 'streams'))
@@ -64,29 +94,72 @@ function writePlaylist(stream, files) {
 	return file
 }
 
-async function decideMode(stream, files) {
+/**
+ * Mode auto: "copy" (hemat CPU) hanya kalau SEMUA video h264, ukurannya sama persis dengan
+ * resolusi + rasio yang dipilih, dan audionya seragam. Selain itu wajib "encode" supaya hasil live
+ * sesuai pilihan dan tidak putus di pergantian video.
+ * Hasil: { mode, reason }.
+ */
+async function decide(stream, files) {
 	const wanted = stream.mode || 'auto'
-	if (wanted === 'copy' || wanted === 'encode') return wanted
+	if (wanted === 'copy' || wanted === 'encode') return { mode: wanted, reason: 'dipilih manual' }
 	try {
-		const info = await ff.mediaInfo(files[0])
-		const sameCodec = info.videoCodec === 'h264' && (info.audioCodec === 'aac' || stream.audioMode !== 'source')
-		if (sameCodec && files.length >= 1) return 'copy'
-	} catch (err) {}
-	return 'encode'
+		const size = sizeFor(stream)
+		let first = null
+		for (const file of files.slice(0, 60)) {
+			const info = await ff.mediaInfo(file)
+			const name = path.basename(file)
+			if (info.videoCodec !== 'h264') return { mode: 'encode', reason: name + ' bukan H.264 (' + (info.videoCodec || '?') + ')' }
+			if (!first) {
+				first = info
+				if (info.width !== size[0] || info.height !== size[1]) {
+					return { mode: 'encode', reason: 'ukuran video ' + info.width + 'x' + info.height + ' beda dengan target ' + size[0] + 'x' + size[1] }
+				}
+				continue
+			}
+			if (info.width !== first.width || info.height !== first.height) return { mode: 'encode', reason: 'ukuran video di playlist tidak seragam (' + name + ')' }
+			if (audioModeOf(stream) === 'source' && Boolean(info.hasAudio) !== Boolean(first.hasAudio)) {
+				return { mode: 'encode', reason: 'sebagian video tidak punya audio (' + name + ')' }
+			}
+		}
+		return first ? { mode: 'copy', reason: 'semua video sudah sesuai target' } : { mode: 'encode', reason: 'video tidak terbaca' }
+	} catch (err) {
+		return { mode: 'encode', reason: 'gagal membaca info video' }
+	}
+}
+
+/** Stream key yang dipakai: key milik stream ini, kalau kosong pakai key default (Settings / YT_STREAM_KEY). */
+function keyFor(stream) {
+	return String(stream.streamKey || '').trim()
+}
+
+function defaultKey() {
+	return String((store.settings().stream || {}).streamKey || '').trim()
+}
+
+/** URL sudah berisi stream key (rtmp://server/app/KEY)? */
+function urlHasKey(url) {
+	const pathPart = String(url || '').trim().replace(/\/+$/, '').replace(/^[a-z]+:\/\/[^/]+/i, '').split('?')[0]
+	return pathPart.split('/').filter(Boolean).length >= 2
 }
 
 function target(stream) {
-	const base = String(stream.rtmpUrl || '').replace(/\/+$/, '')
-	const key = String(stream.streamKey || '').trim()
-	if (!base) throw new Error('RTMP URL belum diisi')
-	if (!key) throw new Error('Stream key belum diisi')
-	return base + '/' + key
+	const base = String(stream.rtmpUrl || '').trim().replace(/\/+$/, '')
+	if (!base) throw userError('RTMP URL belum diisi')
+	if (!/^rtmps?:\/\//i.test(base) && !/^srt:\/\//i.test(base)) throw userError('RTMP URL harus diawali rtmp:// atau rtmps://')
+	const own = keyFor(stream)
+	if (own) return base + '/' + own
+	// URL lengkap yang sudah berisi stream key (rtmp://server/app/KEY) atau SRT (key ada di streamid).
+	if (urlHasKey(base) || /^srt:\/\//i.test(base)) return base
+	const fallback = defaultKey()
+	if (fallback) return base + '/' + fallback
+	throw userError('Stream key belum diisi (Settings > Live / YT_STREAM_KEY di .env, atau di pengaturan stream)')
 }
 
 function buildArgs(stream, playlist, mode) {
 	const fps = Number(stream.fps) || 30
-	const size = SIZES[String(stream.resolution || '1080')] || SIZES['1080']
-	const audioMode = stream.audioMode || 'source'
+	const size = sizeFor(stream)
+	const audioMode = audioModeOf(stream)
 	const args = ['-hide_banner', '-loglevel', 'error', '-stats', '-re']
 	if (stream.loop !== false) args.push('-stream_loop', '-1')
 	args.push('-f', 'concat', '-safe', '0', '-i', playlist)
@@ -106,11 +179,13 @@ function buildArgs(stream, playlist, mode) {
 	args.push('-map', '0:v:0')
 	args.push('-map', externalAudio ? '1:a:0' : '0:a:0?')
 
+	const audioKbps = kbps(stream.audioBitrate, 128) + 'k'
 	if (mode === 'copy') {
 		args.push('-c:v', 'copy')
-		args.push('-c:a', 'aac', '-b:a', stream.audioBitrate || '128k', '-ar', '44100', '-ac', '2')
+		args.push('-c:a', 'aac', '-b:a', audioKbps, '-ar', '44100', '-ac', '2')
 	} else {
-		const bitrate = stream.videoBitrate || '4500k'
+		const videoKbps = kbps(stream.videoBitrate, 4500)
+		const bitrate = videoKbps + 'k'
 		args.push(
 			'-vf', 'scale=' + size[0] + ':' + size[1] + ':force_original_aspect_ratio=decrease,pad=' + size[0] + ':' + size[1] + ':(ow-iw)/2:(oh-ih)/2,fps=' + fps + ',format=yuv420p',
 			'-c:v', 'libx264',
@@ -118,17 +193,19 @@ function buildArgs(stream, playlist, mode) {
 			'-tune', 'zerolatency',
 			'-b:v', bitrate,
 			'-maxrate', bitrate,
-			'-bufsize', String(parseInt(bitrate, 10) * 2) + 'k',
+			'-bufsize', String(videoKbps * 2) + 'k',
 			'-g', String(fps * 2),
 			'-keyint_min', String(fps),
 			'-sc_threshold', '0',
 			'-c:a', 'aac',
-			'-b:a', stream.audioBitrate || '128k',
+			'-b:a', audioKbps,
 			'-ar', '44100',
 			'-ac', '2',
 		)
 	}
-	args.push('-flvflags', 'no_duration_filesize', '-f', 'flv', target(stream))
+	const out = target(stream)
+	if (/^srt:\/\//i.test(out)) args.push('-f', 'mpegts', out)
+	else args.push('-flvflags', 'no_duration_filesize', '-f', 'flv', out)
 	return args
 }
 
@@ -149,19 +226,38 @@ function parseStats(line) {
 
 async function start(id, options) {
 	const o = options || {}
+	if (shuttingDown) throw userError('Server sedang dimatikan', 503)
 	const stream = store.get('streams', id)
-	if (!stream) throw new Error('Stream tidak ditemukan')
-	if (procs.has(id)) stop(id, true)
+	if (!stream) throw userError('Stream tidak ditemukan', 404)
+	if (starting.has(id)) throw userError('Stream sedang dinyalakan, tunggu sebentar', 409)
+	starting.add(id)
+	try {
+		const pendingTimer = timers.get(id)
+		if (pendingTimer) {
+			clearTimeout(pendingTimer)
+			timers.delete(id)
+		}
+		// Pastikan proses lama benar-benar berhenti dulu (hindari 2 ffmpeg kirim ke stream key yang sama).
+		if (procs.has(id)) await stopAndWait(id)
+		return await launch(id, stream, o)
+	} finally {
+		starting.delete(id)
+	}
+}
 
+async function launch(id, stream, o) {
 	const files = resolveItems(stream)
-	if (!files.length) throw new Error('Belum ada video di playlist')
+	if (!files.length) throw userError('Belum ada video di playlist (file video mungkin sudah dihapus)')
 	const playlist = writePlaylist(stream, files)
-	const mode = await decideMode(stream, files)
+	const decision = await decide(stream, files)
+	const mode = decision.mode
 	const args = buildArgs(stream, playlist, mode)
 	const restarts = o.restarts || 0
+	if ((stream.mode || 'auto') === 'auto' && !restarts) log(stream, 'Mode auto memilih ' + mode + ': ' + decision.reason)
 
-	const proc = spawn(ff.FFMPEG, args, { stdio: ['ignore', 'pipe', 'pipe'] })
-	procs.set(id, { proc: proc, startedAt: Date.now(), restarts: restarts, stats: null, stopping: false, mode: mode })
+	const proc = spawn(ff.FFMPEG, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
+	const self = { proc: proc, startedAt: Date.now(), restarts: restarts, stats: null, stopping: false, failed: false, mode: mode }
+	procs.set(id, self)
 	store.update('streams', id, {
 		status: 'live',
 		startedAt: util.nowIso(),
@@ -178,9 +274,8 @@ async function start(id, options) {
 	proc.stderr.on('data', function (chunk) {
 		const text = String(chunk)
 		const stats = parseStats(text)
-		const entry = procs.get(id)
-		if (stats && entry) {
-			entry.stats = stats
+		if (stats) {
+			self.stats = stats
 			events.emit('stream:stats', { streamId: id, stats: stats })
 			return
 		}
@@ -189,25 +284,38 @@ async function start(id, options) {
 	})
 
 	proc.on('error', function (err) {
+		// Biasanya ffmpeg tidak ditemukan. Jangan reconnect terus-menerus.
+		self.failed = true
+		if (procs.get(id) === self) procs.delete(id)
 		log(stream, 'Gagal menjalankan ffmpeg: ' + err.message, 'error')
-		store.update('streams', id, { status: 'error', lastError: err.message })
+		store.update('streams', id, { status: 'error', pid: null, lastError: 'Gagal menjalankan ffmpeg: ' + err.message })
+		events.emit('stream:stopped', { streamId: id, name: stream.name, error: err.message })
 	})
 
 	proc.on('close', function (code) {
-		const entry = procs.get(id)
-		procs.delete(id)
+		if (self.closed) return
+		self.closed = true
+		const entry = self
+		// Proses lama yang sudah diganti proses baru tidak boleh menghapus / me-restart proses baru.
+		if (procs.get(id) === self) procs.delete(id)
+		if (self.failed) return
 		const current = store.get('streams', id)
 		if (!current) return
-		const uptime = entry ? Math.round((Date.now() - entry.startedAt) / 1000) : 0
+		const uptime = Math.round((Date.now() - entry.startedAt) / 1000)
 		store.update('streams', id, { totalUptimeSeconds: (current.totalUptimeSeconds || 0) + uptime, pid: null })
-		if (entry && entry.stopping) {
+		if (entry.keepStatus) {
+			log(current, 'Server dimatikan, live akan lanjut otomatis saat server nyala lagi')
+			return
+		}
+		if (entry.stopping) {
 			store.update('streams', id, { status: 'stopped', stoppedAt: util.nowIso() })
 			log(current, 'Streaming dihentikan')
 			events.emit('stream:stopped', { streamId: id, name: current.name })
 			return
 		}
 		const maxRestarts = current.maxRestarts === undefined ? 0 : Number(current.maxRestarts)
-		const nextRestart = (entry ? entry.restarts : 0) + 1
+		// Sudah jalan stabil > 10 menit -> hitungan restart direset (putus sesekali tidak dihitung menumpuk).
+		const nextRestart = (uptime > 600 ? 0 : entry.restarts) + 1
 		if (maxRestarts > 0 && nextRestart > maxRestarts) {
 			store.update('streams', id, { status: 'error', stoppedAt: util.nowIso(), lastError: 'Melebihi batas restart (' + maxRestarts + ')' })
 			log(current, 'Berhenti: melebihi batas restart', 'error')
@@ -221,7 +329,8 @@ async function start(id, options) {
 		events.emit('stream:reconnecting', { streamId: id, name: current.name, inSeconds: Math.round(backoff / 1000) })
 		notifyDown(current, 'reconnect otomatis')
 		const timer = setTimeout(function () {
-			timers.delete(id)
+			if (timers.get(id) === timer) timers.delete(id)
+			if (shuttingDown) return
 			start(id, { restarts: nextRestart }).catch(function (err) {
 				store.update('streams', id, { status: 'error', lastError: err.message })
 				log(current, 'Restart gagal: ' + err.message, 'error')
@@ -248,7 +357,12 @@ function notifyDown(stream, reason) {
 	} catch (err) {}
 }
 
-function stop(id, silent) {
+function stillRunning(proc) {
+	return proc.exitCode === null && proc.signalCode === null
+}
+
+function stop(id, silent, options) {
+	const o = options || {}
 	const timer = timers.get(id)
 	if (timer) {
 		clearTimeout(timer)
@@ -257,12 +371,14 @@ function stop(id, silent) {
 	const entry = procs.get(id)
 	if (entry) {
 		entry.stopping = true
+		if (o.keepStatus) entry.keepStatus = true
 		try {
 			entry.proc.kill('SIGINT')
 		} catch (err) {}
+		// proc.killed sudah true begitu sinyal terkirim, jadi cek exitCode untuk tahu proses masih hidup.
 		setTimeout(function () {
 			try {
-				if (!entry.proc.killed) entry.proc.kill('SIGKILL')
+				if (stillRunning(entry.proc)) entry.proc.kill('SIGKILL')
 			} catch (err) {}
 		}, 4000)
 	} else if (!silent) {
@@ -271,9 +387,38 @@ function stop(id, silent) {
 	return true
 }
 
-async function restart(id) {
+/** Hentikan proses lalu tunggu sampai benar-benar keluar (maks ~6 detik). */
+function stopAndWait(id) {
+	const entry = procs.get(id)
 	stop(id, true)
-	await util.sleep(1200)
+	if (!entry || !stillRunning(entry.proc)) return Promise.resolve()
+	return new Promise(function (resolve) {
+		const done = setTimeout(resolve, 6000)
+		entry.proc.once('close', function () {
+			clearTimeout(done)
+			resolve()
+		})
+	})
+}
+
+/** Tombol Stop: hentikan lalu tunggu proses keluar, supaya status yang dikembalikan sudah "stopped". */
+async function stopNow(id) {
+	const entry = procs.get(id)
+	stop(id)
+	if (entry && stillRunning(entry.proc)) {
+		await new Promise(function (resolve) {
+			const done = setTimeout(resolve, 6000)
+			entry.proc.once('close', function () {
+				clearTimeout(done)
+				resolve()
+			})
+		})
+	}
+	return status(id)
+}
+
+async function restart(id) {
+	await stopAndWait(id)
 	return start(id, { restarts: 0 })
 }
 
@@ -327,9 +472,19 @@ async function inspect(id) {
 			size: info.size || 0,
 		})
 	}
-	const bitrateKbps = parseInt(stream.videoBitrate || '4500k', 10) + parseInt(stream.audioBitrate || '128k', 10)
-	const readyMode = files.length ? await decideMode(stream, files) : stream.mode || 'auto'
+	const bitrateKbps = kbps(stream.videoBitrate, 4500) + kbps(stream.audioBitrate, 128)
+	const decision = files.length ? await decide(stream, files) : { mode: stream.mode || 'auto', reason: 'playlist kosong' }
+	const readyMode = decision.mode
+	const size = sizeFor(stream)
+	let keySource = 'belum ada'
+	if (keyFor(stream)) keySource = 'key stream ini'
+	else if (urlHasKey(stream.rtmpUrl)) keySource = 'ada di RTMP URL'
+	else if (defaultKey()) keySource = 'key default (Settings / .env)'
 	return {
+		modeReason: decision.reason,
+		target: size[0] + 'x' + size[1],
+		audioMode: audioModeOf(stream),
+		keySource: keySource,
 		files: details,
 		totalDuration: total,
 		totalDurationText: util.formatDuration(total),
@@ -342,9 +497,10 @@ async function inspect(id) {
 
 /** Cek kesehatan tiap 30 detik: hidupkan lagi stream yang harusnya live. */
 function tick() {
+	if (shuttingDown) return
 	store.coll('streams').forEach(function (stream) {
 		if (stream.status !== 'live') return
-		if (procs.has(stream.id) || timers.has(stream.id)) return
+		if (procs.has(stream.id) || timers.has(stream.id) || starting.has(stream.id)) return
 		log(stream, 'Proses hilang, menyalakan ulang', 'warn')
 		start(stream.id, { restarts: (stream.restarts || 0) + 1 }).catch(function (err) {
 			store.update('streams', stream.id, { status: 'error', lastError: err.message })
@@ -355,7 +511,12 @@ function tick() {
 function bootstrap() {
 	setTimeout(function () {
 		store.coll('streams').forEach(function (stream) {
-			if (!stream.autoStart && stream.status !== 'live') return
+			// Lanjutkan live yang masih jalan saat server mati + stream yang diset auto start.
+			const resume = stream.status === 'live' || stream.status === 'reconnecting'
+			if (!stream.autoStart && !resume) {
+				if (stream.status === 'starting') store.update('streams', stream.id, { status: 'stopped', pid: null })
+				return
+			}
 			start(stream.id, { restarts: 0 }).catch(function (err) {
 				store.update('streams', stream.id, { status: 'error', lastError: err.message })
 				events.logger.warn('stream', 'Auto start gagal (' + stream.name + '): ' + err.message)
@@ -371,15 +532,31 @@ function stopAll() {
 	})
 }
 
+/** Dipakai saat server dimatikan: hentikan ffmpeg tapi status live disimpan supaya dilanjutkan saat start. */
+function shutdown() {
+	shuttingDown = true
+	timers.forEach(function (timer) {
+		clearTimeout(timer)
+	})
+	timers.clear()
+	Array.from(procs.keys()).forEach(function (id) {
+		stop(id, true, { keepStatus: true })
+	})
+}
+
 module.exports = {
 	start: start,
 	stop: stop,
+	stopNow: stopNow,
 	restart: restart,
 	status: status,
 	statusAll: statusAll,
 	bootstrap: bootstrap,
 	stopAll: stopAll,
+	shutdown: shutdown,
 	tick: tick,
 	inspect: inspect,
 	resolveItems: resolveItems,
+	audioModeOf: audioModeOf,
+	urlHasKey: urlHasKey,
 }

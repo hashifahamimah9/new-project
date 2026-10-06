@@ -659,6 +659,16 @@ function videoCard(video) {
 async function loadAssets() {
 	var data = await api('/api/assets?limit=200')
 	state.assets = data.assets || []
+	var availableIds = state.assets
+		.filter(function (asset) {
+			return asset.kind === 'image' || asset.kind === 'video'
+		})
+		.map(function (asset) {
+			return asset.id
+		})
+	state.selected = state.selected.filter(function (id) {
+		return availableIds.indexOf(id) !== -1
+	})
 	renderAssetPicker()
 	renderAssetGrid()
 	renderAssetSelects()
@@ -678,7 +688,7 @@ function renderAssetPicker() {
 		.map(function (asset) {
 			var active = state.selected.indexOf(asset.id) !== -1
 			var preview = asset.kind === 'image' ? '<img src="' + esc(asset.url) + '" alt="" loading="lazy" />' : '<div class="thumb-fallback">VIDEO</div>'
-			return '<button type="button" class="pick' + (active ? ' active' : '') + '" data-asset="' + esc(asset.id) + '" title="' + esc(asset.name) + '">' + preview + '<span>' + esc(asset.name) + '</span></button>'
+			return '<button type="button" class="pick' + (active ? ' selected' : '') + '" aria-pressed="' + active + '" data-asset="' + esc(asset.id) + '" title="' + esc(asset.name) + '">' + preview + '<span class="pick-name">' + esc(asset.name) + '</span></button>'
 		})
 		.join('')
 	node.querySelectorAll('[data-asset]').forEach(function (button) {
@@ -802,10 +812,11 @@ function initDropzone(dropId, inputId, onDone) {
 	input.addEventListener('change', async function () {
 		try {
 			var assets = await uploadFiles(input.files)
-			input.value = ''
 			if (onDone) onDone(assets)
 		} catch (err) {
 			toast(err.message, 'error')
+		} finally {
+			input.value = ''
 		}
 	})
 }
